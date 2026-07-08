@@ -163,6 +163,18 @@
               <span v-else class="dim-text">—</span>
             </template>
           </el-table-column>
+          <el-table-column label="操作" width="90" align="center" v-if="auth.role === 'employee'">
+            <template #default="{ row }">
+              <el-button
+                v-if="!row._virtualLeave && ['late','early','missing','absent'].includes(row.status)"
+                type="primary"
+                link
+                size="small"
+                @click.stop="goAppeal(row)"
+              >申诉</el-button>
+              <span v-else class="dim-text">—</span>
+            </template>
+          </el-table-column>
         </el-table>
 
         <div class="pagination-bar">
@@ -469,6 +481,11 @@ function onExport() {
 
 function goImport() {
   router.push('/import')
+}
+
+function goAppeal(row) {
+  sessionStorage.setItem('appeal_record_id', row.id)
+  router.push('/appeals')
 }
 
 // P1-08 批量操作
