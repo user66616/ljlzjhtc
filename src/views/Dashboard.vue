@@ -33,9 +33,9 @@
         <el-select
           v-model="selectedEmp"
           filterable
-          placeholder="请输入姓名或工号搜索"
+          placeholder="请输入姓名或工号搜索，点击直接跳转"
           @change="onEmpSelect"
-          style="flex: 1; max-width: 420px"
+          style="flex: 1; max-width: 520px"
           size="default"
           value-key="employeeId"
         >
@@ -46,7 +46,6 @@
             :value="emp"
           />
         </el-select>
-        <el-button type="primary" :icon="Search" @click="onSearchEmp">搜索并跳转</el-button>
         <el-button v-if="auth.role === 'employee'" :icon="Avatar" @click="goProfile({ employeeId: auth.employeeId })">我的主页</el-button>
       </div>
     </div>
@@ -225,7 +224,7 @@ import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
   TrendCharts, Histogram, Trophy, Warning, DataLine, AlarmClock, Clock, Timer,
-  PieChart, DataAnalysis, WarningFilled, Top, Bottom, Search, User, Avatar
+  PieChart, DataAnalysis, WarningFilled, Top, Bottom, User, Avatar
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import request from '../api/request'
@@ -511,22 +510,7 @@ const searchableEmployees = computed(() => {
   return employees.value.filter((e) => e.employeeId === auth.employeeId)
 })
 
-const searchKeyword = ref('')
 const selectedEmp = ref(null)
-
-function onSearchEmp() {
-  const kw = searchKeyword.value.trim().toLowerCase()
-  if (!kw) return
-  const matched = searchableEmployees.value.find(
-    (e) => e.employeeId.toLowerCase() === kw || e.name.toLowerCase().includes(kw)
-  )
-  if (matched) {
-    selectedEmp.value = matched
-    goProfile(matched)
-  } else {
-    ElMessage.warning('未找到匹配的员工')
-  }
-}
 
 function onEmpSelect(emp) {
   if (emp) goProfile(emp)
