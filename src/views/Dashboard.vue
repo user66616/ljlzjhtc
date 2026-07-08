@@ -38,6 +38,22 @@
       </div>
     </div>
 
+    <!-- P1-12 异常类型占比饼图 + P1-13 部门加班排行 -->
+    <div class="chart-grid2 fade-up">
+      <div class="glass-card chart-card">
+        <div class="card-title">
+          <el-icon><PieChart /></el-icon><span>异常类型占比</span>
+        </div>
+        <div ref="pieRef" class="chart-box"></div>
+      </div>
+      <div class="glass-card chart-card">
+        <div class="card-title">
+          <el-icon><DataAnalysis /></el-icon><span>部门加班排行</span>
+        </div>
+        <div ref="otRef" class="chart-box"></div>
+      </div>
+    </div>
+
     <!-- Top5 考勤最佳员工（公开主页） -->
     <div class="glass-card top-card fade-up">
       <div class="card-title">
@@ -117,7 +133,8 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
-  TrendCharts, Histogram, Trophy, Warning, DataLine, AlarmClock, Clock, Timer
+  TrendCharts, Histogram, Trophy, Warning, DataLine, AlarmClock, Clock, Timer,
+  PieChart, DataAnalysis
 } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
@@ -134,8 +151,12 @@ const records = ref([])
 
 const trendRef = ref()
 const deptRef = ref()
+const pieRef = ref()
+const otRef = ref()
 let trendChart = null
 let deptChart = null
+let pieChart = null
+let otChart = null
 
 const scopeDesc = computed(() => {
   if (auth.role === 'admin') return '全公司考勤数据统计'
@@ -224,7 +245,9 @@ const trendData = computed(() => {
 
 function onTrendRangeChange() {
   nextTick(() => {
-    if (trendChart) trendChart.dispose()
+    trendChart?.dispose()
+    pieChart?.dispose()
+    otChart?.dispose()
     renderCharts()
   })
 }
@@ -238,6 +261,31 @@ const deptLate = computed(() => {
   })
   const entries = Object.entries(byDept).map(([dept, count]) => ({ dept, count }))
   entries.sort((a, b) => b.count - a.count)
+  return entries
+})
+
+// P1-12 异常类型占比
+const anomalyBreakdown = computed(() => {
+  const counts = { late: 0, early: 0, missing: 0, absent: 0 }
+  scoped.value.forEach((r) => {
+    if (r.status === 'late') counts.late++
+    if (r.status === 'early') counts.early++
+    if (r.status === 'missing') counts.missing++
+    if (r.status === 'absent') counts.absent++
+  })
+  return counts
+})
+
+// P1-13 部门加班排行
+const deptOvertime = computed(() => {
+  const byDept = {}
+  scoped.value.forEach((r) => {
+    if (!byDept[r.dept]) byDept[r.dept] = 0
+    byDept[r.dept] += r.overtimeMinutes || 0
+  })
+  const entries = Object.entries(byDept)
+    .map(([dept, minutes]) => ({ dept, minutes }))
+    .sort((a, b) => b.minutes - a.minutes)
   return entries
 })
 
@@ -321,11 +369,78 @@ function renderCharts() {
       }]
     })
   }
+
+  // P1-12 异常类型占比饼图
+  if (pieRef.value) {
+    pieChart = echarts.init(pieRef.value)
+    const ab = anomalyBreakdown.value
+    const pieData = [
+      { name: '迟到', value: ab.late, itemStyle: { color: '#faad14' } },
+      { name: '早退', value: ab.early, itemStyle: { color: '#ff8c00' } },
+      { name: '缺卡', value: ab.missing, itemStyle: { color: '#ef4444' } },
+      { name: '缺勤', value: ab.absent, itemStyle: { color: '#dc2626' } }
+    ].filter((d) => d.value > 0)
+    pieChart.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: {c} 次 ({d}%)' },
+      legend: { bottom: 0, icon: 'circle', fontSize: 12 },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '68%'],
+        center: ['50%', '45%'],
+        data: pieData,
+        label: { show: true, formatter: '{b}\n{d}%', fontSize: 12 },
+        itemStyle: { borderColor: '#fff', borderWidth: 2 }
+      }]
+    })
+  }
+
+  // P1-13 部门加班排行（横向条形图，按加班时长降序）
+  if (otRef.value) {
+    otChart = echarts.init(otRef.value)
+    const data = [...deptOvertime.value]
+    otChart.setOption({
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params) => `${params[0].name}<br/>加班总时长：<b>${(params[0].value / 60).toFixed(1)} 小时</b>`
+      },
+      grid: { left: 72, right: 50, top: 20, bottom: 20 },
+      xAxis: { type: 'value', axisLabel: { fontSize: 11, formatter: (v) => (v / 60).toFixed(0) + 'h' } },
+      yAxis: {
+        type: 'category',
+        data: data.map((d) => d.dept),
+        axisLabel: { fontSize: 12 },
+        axisTick: { show: false },
+        axisLine: { show: false }
+      },
+      series: [{
+        type: 'bar',
+        data: data.map((d) => d.minutes),
+        barWidth: 22,
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+            { offset: 0, color: '#34d399' },
+            { offset: 1, color: '#059669' }
+          ]),
+          borderRadius: [0, 6, 6, 0]
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: (p) => (p.value / 60).toFixed(1) + 'h',
+          fontSize: 12,
+          color: '#6b7280'
+        }
+      }]
+    })
+  }
 }
 
 function resizeCharts() {
   trendChart?.resize()
   deptChart?.resize()
+  pieChart?.resize()
+  otChart?.resize()
 }
 
 onMounted(async () => {
@@ -350,6 +465,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeCharts)
   trendChart?.dispose()
   deptChart?.dispose()
+  pieChart?.dispose()
+  otChart?.dispose()
 })
 </script>
 
@@ -432,6 +549,18 @@ onBeforeUnmount(() => {
 }
 @media (max-width: 980px) {
   .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+@media (max-width: 980px) {
+  .chart-grid2 {
     grid-template-columns: 1fr;
   }
 }

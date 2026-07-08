@@ -60,12 +60,12 @@
       </el-empty>
 
       <template v-else>
-        <el-table :data="paged" border stripe size="default" class="records-table">
+        <el-table :data="paged" border stripe size="default" class="records-table" @row-click="openDetail">
           <el-table-column type="index" label="#" width="55" align="center" />
-          <el-table-column prop="employeeId" label="工号" width="90" />
-          <el-table-column prop="name" label="姓名" width="100" />
-          <el-table-column prop="dept" label="部门" width="100" />
-          <el-table-column prop="date" label="日期" width="120" />
+          <el-table-column prop="employeeId" label="工号" width="90" sortable />
+          <el-table-column prop="name" label="姓名" width="100" sortable />
+          <el-table-column prop="dept" label="部门" width="100" sortable />
+          <el-table-column prop="date" label="日期" width="120" sortable />
           <el-table-column prop="checkIn" label="上班打卡" width="100">
             <template #default="{ row }">
               <span :class="{ 'miss-punch': !row.checkIn }">{{ row.checkIn || '—' }}</span>
@@ -83,17 +83,17 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="迟到(分)" width="90" align="center">
+          <el-table-column prop="lateMinutes" label="迟到(分)" width="100" align="center" sortable>
             <template #default="{ row }">
               <span :class="{ warn: row.lateMinutes > 0 }">{{ row.lateMinutes || 0 }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="早退(分)" width="90" align="center">
+          <el-table-column prop="earlyMinutes" label="早退(分)" width="100" align="center" sortable>
             <template #default="{ row }">
               <span :class="{ warn: row.earlyMinutes > 0 }">{{ row.earlyMinutes || 0 }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="加班(分)" width="90" align="center">
+          <el-table-column prop="overtimeMinutes" label="加班(分)" width="100" align="center" sortable>
             <template #default="{ row }">
               <span :class="{ ot: row.overtimeMinutes > 0 }">{{ row.overtimeMinutes || 0 }}</span>
             </template>
@@ -112,6 +112,40 @@
         </div>
       </template>
     </div>
+
+    <!-- P1-07 记录详情抽屉 -->
+    <el-drawer v-model="detail.show" title="考勤记录详情" size="420px" direction="rtl">
+      <template v-if="detail.row">
+        <div class="detail-section">
+          <h4>基本信息</h4>
+          <div class="detail-row"><span>工号</span><b>{{ detail.row.employeeId }}</b></div>
+          <div class="detail-row"><span>姓名</span><b>{{ detail.row.name }}</b></div>
+          <div class="detail-row"><span>部门</span><b>{{ detail.row.dept }}</b></div>
+          <div class="detail-row"><span>日期</span><b>{{ detail.row.date }}</b></div>
+        </div>
+        <div class="detail-section">
+          <h4>打卡信息</h4>
+          <div class="detail-row"><span>上班打卡</span><b>{{ detail.row.checkIn || '未打卡' }}</b></div>
+          <div class="detail-row"><span>下班打卡</span><b>{{ detail.row.checkOut || '未打卡' }}</b></div>
+        </div>
+        <div class="detail-section">
+          <h4>状态计算明细</h4>
+          <div class="detail-row">
+            <span>考勤状态</span>
+            <el-tag :type="STATUS_META[detail.row.status]?.type" effect="light" size="small">
+              {{ STATUS_META[detail.row.status]?.label }}
+            </el-tag>
+          </div>
+          <div class="detail-row"><span>迟到</span><b>{{ detail.row.lateMinutes || 0 }} 分钟</b></div>
+          <div class="detail-row"><span>早退</span><b>{{ detail.row.earlyMinutes || 0 }} 分钟</b></div>
+          <div class="detail-row"><span>加班</span><b>{{ detail.row.overtimeMinutes || 0 }} 分钟</b></div>
+        </div>
+        <div class="detail-section" v-if="detail.row.__calcTrace">
+          <h4>判定过程</h4>
+          <div class="calc-trace" v-for="(t, i) in detail.row.__calcTrace" :key="i">{{ t }}</div>
+        </div>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -164,8 +198,9 @@ const empMap = computed(() => {
 const computedRecords = computed(() => {
   const rules = rulesStore.rules
   const calc = calcAll(records.value, rules)
+  const map = empMap.value
   return calc.map((r) => {
-    const emp = empMap[r.employeeId] || {}
+    const emp = map[r.employeeId] || {}
     return { ...r, name: emp.name || '未知', dept: emp.dept || '未知' }
   })
 })
@@ -250,6 +285,32 @@ function onExport() {
 function goImport() {
   router.push('/import')
 }
+
+// P1-07 记录详情抽屉
+const detail = reactive({ show: false, row: null })
+
+function openDetail(row) {
+  // 生成判定过程说明
+  const trace = []
+  const rules = rulesStore.rules
+  if (!row.checkIn && !row.checkOut) {
+    trace.push('无任何打卡记录 → 判定为缺勤')
+  } else if (!row.checkIn || !row.checkOut) {
+    trace.push(`仅${!row.checkIn ? '上班' : '下班'}打卡缺失 → 按缺卡策略处理`)
+    trace.push(`当前策略：${rules.missingStrategy === 'absent' ? '缺卡当作缺勤' : '仅标记异常'}`)
+  } else {
+    trace.push(`上班打卡 ${row.checkIn}，迟到判定线 ${rules.lateAfter}`)
+    if (row.isLate) trace.push(`晚到 ${row.lateMinutes} 分钟 → 迟到`)
+    else trace.push('未超过迟到判定线 → 正常')
+    trace.push(`下班打卡 ${row.checkOut}，早退判定线 ${rules.earlyBefore}`)
+    if (row.isEarly) trace.push(`早走 ${row.earlyMinutes} 分钟 → 早退`)
+    else trace.push('未早退')
+    trace.push(`加班起算线 ${rules.overtimeAfter}`)
+    if (row.isOvertime) trace.push(`加班 ${row.overtimeMinutes} 分钟`)
+  }
+  detail.row = { ...row, __calcTrace: trace }
+  detail.show = true
+}
 </script>
 
 <style scoped>
@@ -285,5 +346,40 @@ function goImport() {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+/* P1-07 详情抽屉 */
+.detail-section {
+  margin-bottom: 20px;
+}
+.detail-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.detail-row span {
+  color: var(--text-2);
+}
+.detail-row b {
+  font-weight: 600;
+}
+.calc-trace {
+  padding: 6px 12px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: #f9fafb;
+  border-radius: 4px;
+  border-left: 3px solid var(--brand);
 }
 </style>
