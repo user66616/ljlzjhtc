@@ -104,6 +104,9 @@
             批量标记待处理
           </el-button>
           <span class="batch-count" v-if="selection.length > 0">已选 {{ selection.length }} 条</span>
+          <el-button type="primary" link size="small" @click="router.push('/exceptions')" style="margin-left: auto">
+            前往异常处理页面 →
+          </el-button>
         </div>
         <el-table :data="paged" border stripe size="default" class="records-table" @row-click="openDetail"
           @selection-change="onSelectionChange">
@@ -143,6 +146,21 @@
           <el-table-column prop="overtimeMinutes" label="加班(分)" width="100" align="center" sortable>
             <template #default="{ row }">
               <span :class="{ ot: row.overtimeMinutes > 0 }">{{ row.overtimeMinutes || 0 }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="处理状态" width="100" align="center" v-if="auth.role === 'admin' || auth.role === 'manager'">
+            <template #default="{ row }">
+              <el-tag
+                v-if="!row._virtualLeave && ['late','early','missing','absent'].includes(row.status)"
+                :type="row.handleStatus === 'handled' ? 'success' : 'warning'"
+                effect="dark"
+                size="small"
+                style="cursor: pointer"
+                @click.stop="toggleHandleStatus(row)"
+              >
+                {{ row.handleStatus === 'handled' ? '已处理' : '待处理' }}
+              </el-tag>
+              <span v-else class="dim-text">—</span>
             </template>
           </el-table-column>
         </el-table>
@@ -471,7 +489,22 @@ async function batchSetStatus(status) {
     records.value = records.value.map((r) =>
       ids.has(r.id) ? { ...r, handleStatus: status } : r
     )
-    ElMessage.success(`已批量${status === 'handled' ? '标记已处理' : '标记待处理'} ${selection.value.length} 条`)
+    ElMessage.success(`已批量${status === 'handled' ? '标记已处理' : '标记待处理'} ${selection.value.length} 条，状态已同步至异常处理页面`)
+  } catch (e) {
+    // 错误已由拦截器提示
+  }
+}
+
+// 单条切换处理状态
+async function toggleHandleStatus(row) {
+  const newStatus = row.handleStatus === 'handled' ? 'pending' : 'handled'
+  try {
+    const res = await request.patch(`/attendanceRecords/${row.id}`, { handleStatus: newStatus })
+    row.handleStatus = res.data.handleStatus
+    // 同步到本地 records
+    const idx = records.value.findIndex((r) => r.id === row.id)
+    if (idx !== -1) records.value[idx].handleStatus = res.data.handleStatus
+    ElMessage.success(newStatus === 'handled' ? '已标记为已处理' : '已标记为待处理')
   } catch (e) {
     // 错误已由拦截器提示
   }
@@ -597,6 +630,9 @@ async function submitAppeal() {
 .miss-punch {
   color: #ef4444;
   font-weight: 600;
+}
+.dim-text {
+  color: #c0c4cc;
 }
 .warn {
   color: #d97706;
