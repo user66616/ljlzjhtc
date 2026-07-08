@@ -115,11 +115,16 @@ const rulesStore = useRulesStore()
 const loading = ref(false)
 const employees = ref([])
 const records = ref([])
+const appeals = ref([])
 
 const reportType = ref('personal')
 const month = ref(new Date().toISOString().slice(0, 7))
 const selectedEmp = ref('')
 const selectedDept = ref('')
+
+const approvedAppealIds = computed(() =>
+  appeals.value.filter((a) => a.status === 'approved').map((a) => a.recordId)
+)
 
 const deptOptions = computed(() => {
   const set = new Set(employees.value.map((e) => e.dept))
@@ -137,7 +142,7 @@ const monthRecords = computed(() => {
 })
 
 const calcMonthRecords = computed(() => {
-  const calc = calcAll(monthRecords.value, rulesStore.rules)
+  const calc = calcAll(monthRecords.value, rulesStore.rules, [], approvedAppealIds.value)
   const map = empMap.value
   return calc.map((r) => {
     const emp = map[r.employeeId] || {}
@@ -204,12 +209,14 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes] = await Promise.all([
+    const [empRes, recRes, appealRes] = await Promise.all([
       request.get('/employees'),
-      request.get('/attendanceRecords')
+      request.get('/attendanceRecords'),
+      request.get('/appeals')
     ])
     employees.value = empRes.data
     records.value = recRes.data
+    appeals.value = appealRes.data
     // 默认选中第一个员工
     if (employees.value.length > 0) selectedEmp.value = employees.value[0].employeeId
     // 经理端默认只统计本部门
