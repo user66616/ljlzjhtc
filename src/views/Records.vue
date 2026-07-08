@@ -20,7 +20,7 @@
             style="width: 240px"
           />
         </el-form-item>
-        <el-form-item label="部门" v-if="auth.role !== 'employee'">
+        <el-form-item label="部门" v-if="auth.role === 'admin'">
           <el-select v-model="filters.dept" placeholder="全部部门" clearable style="width: 140px">
             <el-option v-for="d in deptOptions" :key="d" :label="d" :value="d" />
           </el-select>
