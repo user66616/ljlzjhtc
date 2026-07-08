@@ -23,33 +23,6 @@
       </div>
     </div>
 
-    <!-- 员工快速搜索模块 -->
-    <div class="glass-card search-card fade-up">
-      <div class="card-title">
-        <el-icon><User /></el-icon><span>快速跳转员工主页</span>
-        <span class="card-sub">搜索姓名或工号，点击直接查看员工热力图与考勤详情</span>
-      </div>
-      <div class="search-bar">
-        <el-select
-          v-model="selectedEmp"
-          filterable
-          placeholder="请输入姓名或工号搜索，点击直接跳转"
-          @change="onEmpSelect"
-          style="flex: 1; max-width: 520px"
-          size="default"
-          value-key="employeeId"
-        >
-          <el-option
-            v-for="emp in searchableEmployees"
-            :key="emp.employeeId"
-            :label="`${emp.name}（${emp.employeeId}）· ${emp.dept || '无部门'}`"
-            :value="emp"
-          />
-        </el-select>
-        <el-button v-if="auth.role === 'employee'" :icon="Avatar" @click="goProfile({ employeeId: auth.employeeId })">我的主页</el-button>
-      </div>
-    </div>
-
     <!-- P2-06 同环比指标 -->
     <div class="glass-card mom-card fade-up" v-if="auth.role !== 'employee'">
       <div class="card-title">
@@ -80,6 +53,33 @@
             {{ Math.abs(momData.overtimeHours.delta).toFixed(1) }} 小时 环比{{ momData.overtimeHours.delta >= 0 ? '上升' : '下降' }}
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 员工快速搜索模块 -->
+    <div class="glass-card search-card fade-up">
+      <div class="card-title">
+        <el-icon><User /></el-icon><span>快速跳转员工主页</span>
+        <span class="card-sub">搜索姓名或工号，点击直接查看员工热力图与考勤详情</span>
+      </div>
+      <div class="search-bar">
+        <el-select
+          v-model="selectedEmp"
+          filterable
+          placeholder="请输入姓名或工号搜索，点击直接跳转"
+          @change="onEmpSelect"
+          style="flex: 1; max-width: 520px"
+          size="default"
+          value-key="employeeId"
+        >
+          <el-option
+            v-for="emp in searchableEmployees"
+            :key="emp.employeeId"
+            :label="`${emp.name}（${emp.employeeId}）· ${emp.dept || '无部门'}`"
+            :value="emp"
+          />
+        </el-select>
+        <el-button v-if="auth.role === 'employee'" :icon="Avatar" @click="goProfile({ employeeId: auth.employeeId })">我的主页</el-button>
       </div>
     </div>
 
