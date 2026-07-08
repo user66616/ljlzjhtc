@@ -1,0 +1,33 @@
+{
+  "name": "attendance-system",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:server": "node --watch server/index.js",
+    "dev:web": "vite",
+    "dev": "concurrently -n server,web -c yellow,cyan \"npm run dev:server\" \"npm run dev:web\"",
+    "db:init": "node scripts/db-init.mjs",
+    "db:seed": "node scripts/db-seed.mjs",
+    "db:reset": "node scripts/db-init.mjs && node scripts/db-seed.mjs",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "echarts": "^5.5.1",
+    "element-plus": "^2.8.4",
+    "express": "^4.21.0",
+    "mysql2": "^3.11.3",
+    "pinia": "^2.2.4",
+    "vue": "^3.5.12",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.4",
+    "concurrently": "^9.0.1",
+    "vite": "^5.4.9"
+  }
+}
