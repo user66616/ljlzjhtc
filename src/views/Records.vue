@@ -435,10 +435,14 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
+    const recordParams = {}
+    if (auth.role === 'employee') recordParams.employeeId = auth.employeeId
+    const leaveParams = {}
+    if (auth.role === 'employee') leaveParams.employeeId = auth.employeeId
     const [empRes, recRes, leaveRes] = await Promise.all([
       request.get('/employees'),
-      request.get('/attendanceRecords'),
-      request.get('/leaveRecords')
+      request.get('/attendanceRecords', { params: recordParams }),
+      request.get('/leaveRecords', { params: leaveParams })
     ])
     employees.value = empRes.data
     records.value = recRes.data

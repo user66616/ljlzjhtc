@@ -27,10 +27,19 @@ function toCamel(r) {
   }
 }
 
-// GET /api/attendanceRecords —— 返回全部记录（前端做分页/筛选/计算）
+// GET /api/attendanceRecords —— 返回记录（支持按 employeeId 过滤）
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await req.app.get('pool').query('SELECT * FROM attendance_records ORDER BY date ASC, employee_id ASC')
+    const { employeeId, startDate, endDate } = req.query
+    let sql = 'SELECT * FROM attendance_records'
+    const params = []
+    const where = []
+    if (employeeId) { where.push('employee_id = ?'); params.push(employeeId) }
+    if (startDate) { where.push('date >= ?'); params.push(startDate) }
+    if (endDate) { where.push('date <= ?'); params.push(endDate) }
+    if (where.length) sql += ' WHERE ' + where.join(' AND ')
+    sql += ' ORDER BY date ASC, employee_id ASC'
+    const [rows] = await req.app.get('pool').query(sql, params)
     res.json(rows.map(toCamel))
   } catch (e) {
     res.status(500).json({ message: '查询考勤记录失败：' + e.message })

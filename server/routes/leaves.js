@@ -26,7 +26,12 @@ function toCamel(r) {
 // GET /api/leaveRecords
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await req.app.get('pool').query('SELECT * FROM leave_records ORDER BY start_date DESC')
+    const { employeeId } = req.query
+    let sql = 'SELECT * FROM leave_records'
+    const params = []
+    if (employeeId) { sql += ' WHERE employee_id = ?'; params.push(employeeId) }
+    sql += ' ORDER BY start_date DESC'
+    const [rows] = await req.app.get('pool').query(sql, params)
     res.json(rows.map(toCamel))
   } catch (e) {
     res.status(500).json({ message: '查询请假记录失败：' + e.message })
