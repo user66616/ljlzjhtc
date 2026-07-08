@@ -67,7 +67,7 @@
 
     <!-- 年度汇总 -->
     <div class="hm-summary">
-      {{ year }}年 · 出勤{{ stats.attended }}天 · 迟到{{ stats.late }}次 · 早退{{ stats.early }}次 · 缺勤{{ stats.absent }}次 · 请假{{ stats.leave }}天 · 加班{{ stats.overtimeMin }}分钟
+      {{ year }}年 · 出勤{{ stats.attended }}天 · 迟到{{ stats.late }}次 · 早退{{ stats.early }}次 · 缺勤{{ stats.absent }}次 · 请假/出差/调休{{ stats.leave }}天 · 加班{{ stats.overtimeMin }}分钟
     </div>
 
     <!-- 悬浮提示 -->
@@ -142,8 +142,10 @@ function greenForMinutes(mins) {
 
 // 判断某天是否在请假范围内
 function isOnLeave(dateStr) {
-  return props.leaves.some((l) => dateStr >= l.startDate && dateStr <= l.endDate)
+  return props.leaves.find((l) => dateStr >= l.startDate && dateStr <= l.endDate) || null
 }
+
+const LEAVE_LABEL_MAP = { leave: '请假', business_trip: '出差', comp_off: '调休' }
 
 // 判断某天是否为周末（简单判断：周六/周日，没有打卡记录且非请假）
 function isWeekend(d) {
@@ -185,7 +187,8 @@ function buildGrid() {
       const key = fmtDate(cur)
       const inYear = cur.getFullYear() === y
       const rec = recMap[key]
-      const onLeave = isOnLeave(key)
+      const leave = isOnLeave(key)
+      const onLeave = !!leave
       const weekend = isWeekend(cur) && inYear && !rec
 
       let color = '#ebedf0'
@@ -197,9 +200,13 @@ function buildGrid() {
       } else if (onLeave) {
         color = STATUS_COLORS.leave
         status = 'leave'
-        detail = '请假/出差/调休'
+        detail = LEAVE_LABEL_MAP[leave.leaveType] || '请假/出差/调休'
       } else if (rec) {
-        if (rec.status === 'absent') {
+        if (['leave', 'business_trip', 'comp_off'].includes(rec.status)) {
+          color = STATUS_COLORS.leave
+          status = 'leave'
+          detail = LEAVE_LABEL_MAP[rec.status] || '请假/出差/调休'
+        } else if (rec.status === 'absent') {
           color = STATUS_COLORS.absent
           status = 'absent'
           detail = '缺勤'
@@ -275,7 +282,9 @@ const stats = computed(() => {
   weeks.value.forEach((week) => {
     week.forEach((d) => {
       if (!d.inYear) return
-      if (d.record) {
+      if (d.status === 'leave') {
+        leave++
+      } else if (d.record) {
         if (d.record.status === 'absent' || d.record.status === 'missing') {
           absent++
         } else {
@@ -287,7 +296,6 @@ const stats = computed(() => {
       } else if (d.status === 'absent') {
         absent++
       }
-      if (d.status === 'leave') leave++
     })
   })
   return { attended, late, early, absent, leave, overtimeMin }
@@ -296,7 +304,7 @@ const stats = computed(() => {
 // 图例项
 const legendItems = computed(() => {
   return [
-    { key: 'leave', color: STATUS_COLORS.leave, label: '请假', count: stats.value.leave },
+    { key: 'leave', color: STATUS_COLORS.leave, label: '请假/出差/调休', count: stats.value.leave },
     { key: 'absent', color: STATUS_COLORS.absent, label: '缺勤', count: stats.value.absent },
     { key: 'g0', color: GREEN_SCALE[0], label: '休息/无', count: 0 },
     { key: 'g1', color: GREEN_SCALE[1], label: '<7h', count: 0 },
@@ -319,7 +327,7 @@ function hoverCell(e, day) {
     statusLabel = '缺勤'
     statusColor = STATUS_COLORS.absent
   } else if (day.status === 'leave') {
-    statusLabel = '请假'
+    statusLabel = '请假/出差/调休'
     statusColor = STATUS_COLORS.leave
   } else if (day.status === 'normal') {
     statusLabel = '出勤'
