@@ -344,12 +344,12 @@ function onCommand(cmd) {
   gap: 14px;
 }
 .icon-btn {
-  font-size: 20px;
+  font-size: 24px;
   cursor: pointer;
   color: var(--text-2);
   transition: all 0.2s;
-  padding: 7px;
-  border-radius: 10px;
+  padding: 8px;
+  border-radius: 12px;
   background: transparent;
 }
 .icon-btn:hover {
@@ -364,6 +364,12 @@ function onCommand(cmd) {
 .notify-badge :deep(.el-badge__content) {
   z-index: 1;
   border: none;
+  font-size: 12px;
+  height: 18px;
+  line-height: 18px;
+  padding: 0 6px;
+  top: 4px;
+  right: 6px;
 }
 .notify-list {
   padding: 0 12px;
