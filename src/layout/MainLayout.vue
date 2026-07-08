@@ -42,6 +42,15 @@
           </el-breadcrumb>
         </div>
         <div class="header-right">
+          <el-button
+            v-if="auth.role === 'employee'"
+            type="primary"
+            plain
+            round
+            size="small"
+            :icon="Avatar"
+            @click="router.push(`/employee/${auth.employeeId}`)"
+          >我的主页</el-button>
           <el-tag :type="roleTagType" effect="light" round>{{ roleLabel }}</el-tag>
           <el-icon class="theme-btn" @click="theme.toggle()">
             <Moon v-if="!theme.dark" />
@@ -108,6 +117,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
+import { Avatar } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import ChangePasswordDialog from '../components/ChangePasswordDialog.vue'

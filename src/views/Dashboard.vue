@@ -56,8 +56,8 @@
       </div>
     </div>
 
-    <!-- 员工快速搜索模块 -->
-    <div class="glass-card search-card fade-up">
+    <!-- 员工快速搜索模块：仅管理员/经理可见 -->
+    <div class="glass-card search-card fade-up" v-if="auth.role !== 'employee'">
       <div class="card-title">
         <el-icon><User /></el-icon><span>快速跳转员工主页</span>
         <span class="card-sub">搜索姓名或工号，点击直接查看员工热力图与考勤详情</span>
@@ -79,7 +79,6 @@
             :value="emp"
           />
         </el-select>
-        <el-button v-if="auth.role === 'employee'" :icon="Avatar" @click="goProfile({ employeeId: auth.employeeId })">我的主页</el-button>
       </div>
     </div>
 
@@ -224,7 +223,7 @@ import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
   TrendCharts, Histogram, Trophy, Warning, DataLine, AlarmClock, Clock, Timer,
-  PieChart, DataAnalysis, WarningFilled, Top, Bottom, User, Avatar
+  PieChart, DataAnalysis, WarningFilled, Top, Bottom, User
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import request from '../api/request'
