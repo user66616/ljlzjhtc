@@ -37,7 +37,7 @@
 
       <!-- 热力图 -->
       <div class="glass-card heatmap-card fade-up">
-        <AttendanceHeatmap :records="empRecords" :leaves="empLeaves" />
+        <AttendanceHeatmap :records="empRecords" :leaves="empLeaves" :calendar="calendar" />
       </div>
 
       <!-- 个人 KPI -->
@@ -119,6 +119,7 @@ const employees = ref([])
 const records = ref([])
 const leaves = ref([])
 const appeals = ref([])
+const calendar = ref([])
 const ranking = ref({ ranked: [], top5: [], bottom5: [] })
 
 const targetId = computed(() => route.params.employeeId)
@@ -176,16 +177,18 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes, lvRes, appealRes] = await Promise.all([
+    const [empRes, recRes, lvRes, appealRes, calRes] = await Promise.all([
       request.get('/employees'),
       request.get('/attendanceRecords'),
       request.get('/leaveRecords'),
-      request.get('/appeals')
+      request.get('/appeals'),
+      request.get('/workCalendar')
     ])
     employees.value = empRes.data
     records.value = recRes.data
     leaves.value = lvRes.data
     appeals.value = appealRes.data
+    calendar.value = calRes.data
     ranking.value = computeRanking(records.value, employees.value, rulesStore.rules)
 
     // 检查可见性

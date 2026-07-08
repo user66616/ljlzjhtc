@@ -84,7 +84,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 
 const props = defineProps({
   records: { type: Array, default: () => [] },
-  leaves: { type: Array, default: () => [] }
+  leaves: { type: Array, default: () => [] },
+  calendar: { type: Array, default: () => [] }
 })
 
 const CELL = 14
@@ -153,6 +154,13 @@ function isWeekend(d) {
   return dow === 0 || dow === 6
 }
 
+// 日历映射：date -> { dayType, label }
+const calendarMap = computed(() => {
+  const map = {}
+  props.calendar.forEach((c) => { map[c.date] = c })
+  return map
+})
+
 // 构建周网格
 const weeks = ref([])
 
@@ -190,6 +198,8 @@ function buildGrid() {
       const leave = isOnLeave(key)
       const onLeave = !!leave
       const weekend = isWeekend(cur) && inYear && !rec
+      const cal = calendarMap.value[key]
+      const isHoliday = cal && (cal.dayType === 'holiday' || cal.dayType === 'weekend')
 
       let color = '#ebedf0'
       let status = null
@@ -197,6 +207,10 @@ function buildGrid() {
 
       if (!inYear) {
         color = 'transparent'
+      } else if (isHoliday) {
+        color = '#ebedf0'
+        status = null
+        detail = cal.dayType === 'holiday' ? `节假日：${cal.label || '法定节假日'}` : '周末休息'
       } else if (onLeave) {
         color = STATUS_COLORS.leave
         status = 'leave'
@@ -349,6 +363,9 @@ function hoverCell(e, day) {
   } else if (day.detail === '周末休息') {
     statusLabel = '周末休息'
     statusColor = '#9ca3af'
+  } else if (day.detail && day.detail.startsWith('节假日')) {
+    statusLabel = day.detail
+    statusColor = '#9ca3af'
   }
   tip.value = {
     show: true,
@@ -365,6 +382,7 @@ function hideTip() { tip.value.show = false }
 onMounted(() => buildGrid())
 watch(() => props.records, () => buildGrid(), { deep: true })
 watch(() => props.leaves, () => buildGrid(), { deep: true })
+watch(() => props.calendar, () => buildGrid(), { deep: true })
 </script>
 
 <style scoped>
