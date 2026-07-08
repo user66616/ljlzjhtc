@@ -54,6 +54,10 @@
         <span class="hm-legend-dot" :style="{ background: STATUS_COLORS.absent }"></span>
         缺勤
       </span>
+      <span class="hm-legend-item">
+        <span class="hm-legend-dot" :style="{ background: FUTURE_COLOR }"></span>
+        未到来
+      </span>
       <span class="hm-legend-sep"></span>
       <span class="hm-legend-text">工时：</span>
       <span class="hm-legend-item">少</span>
@@ -108,6 +112,7 @@ const STATUS_COLORS = {
   late: '#f97316',
   early: '#eab308'
 }
+const FUTURE_COLOR = '#c7d2fe'  // 未到来日期：淡蓝紫色，与周末灰色明显区分
 
 const STATUS_LABELS = {
   absent: '缺勤',
@@ -219,8 +224,8 @@ function buildGrid() {
         status = null
         detail = '周末休息'
       } else if (key > todayStr) {
-        // 还没到那一天，不记缺勤，用浅灰占位
-        color = '#f3f4f6'
+        // 还没到那一天，不记缺勤，用淡蓝紫占位，与周末灰色明显区分
+        color = FUTURE_COLOR
         status = null
         detail = '未到来'
       } else {
@@ -309,7 +314,7 @@ function hoverCell(e, day) {
   const rect = gridRef.value.getBoundingClientRect()
   const cellRect = e.target.getBoundingClientRect()
   let statusLabel = day.detail === '未到来' ? '未到来' : '休息'
-  let statusColor = day.detail === '未到来' ? '#d1d5db' : '#9ca3af'
+  let statusColor = day.detail === '未到来' ? FUTURE_COLOR : '#9ca3af'
   if (day.status === 'absent') {
     statusLabel = '缺勤'
     statusColor = STATUS_COLORS.absent
