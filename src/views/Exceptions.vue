@@ -24,6 +24,17 @@
     <!-- 筛选区 -->
     <div class="glass-card filter-bar fade-up">
       <el-form :inline="true" :model="filters">
+        <el-form-item label="日期范围">
+          <el-date-picker
+            v-model="filters.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 260px"
+          />
+        </el-form-item>
         <el-form-item label="异常类型">
           <el-select v-model="filters.status" placeholder="全部异常" clearable style="width: 120px">
             <el-option label="迟到" value="late" />
@@ -42,6 +53,9 @@
             <el-option label="待处理" value="pending" />
             <el-option label="已处理" value="handled" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-input v-model="filters.keyword" placeholder="姓名/工号" clearable style="width: 140px" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :icon="Search" @click="onSearch">查询</el-button>
@@ -124,7 +138,7 @@ const loading = ref(false)
 const employees = ref([])
 const records = ref([])
 
-const filters = reactive({ status: '', dept: '', handleStatus: '' })
+const filters = reactive({ status: '', dept: '', handleStatus: '', dateRange: null, keyword: '' })
 const page = reactive({ current: 1, size: 10 })
 
 const scopeDesc = computed(() => {
@@ -182,6 +196,14 @@ const filtered = computed(() => {
     if (filters.status && r.status !== filters.status) return false
     if (filters.dept && r.dept !== filters.dept) return false
     if (filters.handleStatus && r.handleStatus !== filters.handleStatus) return false
+    if (filters.dateRange && filters.dateRange.length === 2) {
+      const [start, end] = filters.dateRange
+      if (r.date < start || r.date > end) return false
+    }
+    if (filters.keyword) {
+      const kw = filters.keyword.toLowerCase()
+      if (!r.name.toLowerCase().includes(kw) && !r.employeeId.toLowerCase().includes(kw)) return false
+    }
     return true
   })
 })
@@ -214,6 +236,8 @@ function onReset() {
   filters.status = ''
   filters.dept = ''
   filters.handleStatus = ''
+  filters.dateRange = null
+  filters.keyword = ''
   page.current = 1
 }
 
