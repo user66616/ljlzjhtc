@@ -55,13 +55,13 @@
       <el-empty v-if="!loading && filtered.length === 0" description="暂无异常记录" />
 
       <template v-else>
-        <el-table :data="paged" border stripe size="default">
-          <el-table-column type="index" label="#" width="50" align="center" />
-          <el-table-column prop="employeeId" label="工号" width="90" />
-          <el-table-column prop="name" label="姓名" width="90" />
-          <el-table-column prop="dept" label="部门" width="100" />
-          <el-table-column prop="date" label="日期" width="120" />
-          <el-table-column label="异常类型" width="90" align="center">
+        <el-table :data="paged" border stripe size="default" class="exceptions-table">
+          <el-table-column type="index" label="#" width="60" align="center" />
+          <el-table-column prop="employeeId" label="工号" min-width="110" />
+          <el-table-column prop="name" label="姓名" min-width="110" />
+          <el-table-column prop="dept" label="部门" min-width="130" />
+          <el-table-column prop="date" label="日期" min-width="130" />
+          <el-table-column label="异常类型" min-width="120" align="center">
             <template #default="{ row }">
               <el-tag :type="STATUS_META[row.status]?.type" effect="light" size="small">
                 {{ STATUS_META[row.status]?.label }}
@@ -236,6 +236,25 @@ function onReset() {
 
 .table-card {
   padding: 16px 20px;
+}
+
+.exceptions-table :deep(th) {
+  font-weight: 600;
+  background: #f8fafc;
+  color: var(--text-1);
+  height: 44px;
+}
+.exceptions-table :deep(td) {
+  height: 48px;
+  padding: 10px 12px;
+}
+.exceptions-table :deep(.el-table__cell) {
+  font-size: 14px;
+}
+.exceptions-table :deep(.el-tag) {
+  font-size: 13px;
+  padding: 0 10px;
+  height: 26px;
 }
 
 .pagination-bar {
