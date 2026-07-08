@@ -214,6 +214,13 @@ function buildGrid() {
           color = STATUS_COLORS.absent
           status = 'absent'
           detail = '缺勤（缺卡）'
+        } else if (rec.status === 'appealed') {
+          // 申诉通过：视同正常出勤，按工作时长显示绿色
+          const mins = workMinutes(rec.checkIn, rec.checkOut)
+          color = greenForMinutes(mins)
+          status = 'normal'
+          const hrs = mins > 0 ? (mins / 60).toFixed(1) : 0
+          detail = `申诉通过 · 工作 ${hrs} 小时`
         } else {
           // normal/late/early/overtime - 都用绿色按上班时长，迟到/早退在tooltip显示
           const mins = workMinutes(rec.checkIn, rec.checkOut)

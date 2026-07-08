@@ -137,6 +137,7 @@ const rulesStore = useRulesStore()
 const loading = ref(false)
 const employees = ref([])
 const records = ref([])
+const appeals = ref([])
 
 const filters = reactive({ status: '', dept: '', handleStatus: '', dateRange: null, keyword: '' })
 const page = reactive({ current: 1, size: 10 })
@@ -158,9 +159,14 @@ const empMap = computed(() => {
   return m
 })
 
+// 已通过申诉的考勤记录ID集合
+const approvedAppealIds = computed(() =>
+  appeals.value.filter((a) => a.status === 'approved').map((a) => a.recordId)
+)
+
 const computedRecords = computed(() => {
   const rules = rulesStore.rules
-  const calc = calcAll(records.value, rules)
+  const calc = calcAll(records.value, rules, [], approvedAppealIds.value)
   const map = empMap.value
   return calc.map((r) => {
     const emp = map[r.employeeId] || {}
@@ -220,12 +226,14 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes] = await Promise.all([
+    const [empRes, recRes, appealRes] = await Promise.all([
       request.get('/employees'),
-      request.get('/attendanceRecords')
+      request.get('/attendanceRecords'),
+      request.get('/appeals')
     ])
     employees.value = empRes.data
     records.value = recRes.data
+    appeals.value = appealRes.data
   } finally {
     loading.value = false
   }

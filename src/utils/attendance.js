@@ -32,7 +32,8 @@ export const STATUS_META = {
   leave: { label: '请假', type: 'primary', color: '#2563eb' },
   business_trip: { label: '出差', type: 'primary', color: '#7c3aed' },
   comp_off: { label: '调休', type: 'primary', color: '#0891b2' },
-  overtime: { label: '加班', type: 'primary', color: '#1677ff' }
+  overtime: { label: '加班', type: 'primary', color: '#1677ff' },
+  appealed: { label: '申诉通过', type: 'success', color: '#10b981' }
 }
 
 // 单条记录状态计算
@@ -101,10 +102,17 @@ export function calcRecord(rec, rules) {
   }
 }
 
-// 批量计算（支持传入请假记录，请假期间标记为 leave / business_trip / comp_off 状态）
-export function calcAll(records, rules, leaves) {
+// 批量计算（支持传入请假记录、已通过申诉的记录ID集合）
+// leaves：请假记录，请假期间标记为 leave / business_trip / comp_off
+// approvedAppealIds：已通过申诉的考勤记录ID集合，这些记录标记为 appealed（申诉通过，视同正常）
+export function calcAll(records, rules, leaves, approvedAppealIds) {
   if (!rules) return records.map((r) => ({ ...r, status: 'normal' }))
+  const approvedSet = new Set(approvedAppealIds || [])
   return records.map((r) => {
+    // 申诉通过：优先覆盖，视同正常
+    if (approvedSet.has(r.id)) {
+      return { ...r, status: 'appealed', isLate: false, isEarly: false, isOvertime: false, lateMinutes: 0, earlyMinutes: 0, overtimeMinutes: 0 }
+    }
     if (leaves && leaves.length > 0) {
       const leave = leaves.find(
         (l) => l.employeeId === r.employeeId && r.date >= l.startDate && r.date <= l.endDate
@@ -127,6 +135,7 @@ export function summarize(records) {
   const earlyCount = records.filter((r) => r.isEarly).length
   const overtimeCount = records.filter((r) => r.isOvertime).length
   const overtimeMinutes = records.reduce((s, r) => s + (r.overtimeMinutes || 0), 0)
+  const exceptionCount = records.filter((r) => ['late', 'early', 'missing', 'absent'].includes(r.status)).length
   const attendanceRate = total === 0 ? 0 : (attended / total) * 100
   return {
     total,
@@ -137,6 +146,7 @@ export function summarize(records) {
     overtimeCount,
     overtimeMinutes,
     overtimeHours: +(overtimeMinutes / 60).toFixed(1),
+    exceptionCount,
     attendanceRate: +attendanceRate.toFixed(1)
   }
 }

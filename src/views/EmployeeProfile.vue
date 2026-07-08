@@ -118,6 +118,7 @@ const allowed = ref(false)
 const employees = ref([])
 const records = ref([])
 const leaves = ref([])
+const appeals = ref([])
 const ranking = ref({ ranked: [], top5: [], bottom5: [] })
 
 const targetId = computed(() => route.params.employeeId)
@@ -126,10 +127,15 @@ const emp = computed(() => {
   return employees.value.find((e) => e.employeeId === targetId.value) || { name: '', employeeId: targetId.value, dept: '', position: '' }
 })
 
+// 已通过申诉的考勤记录ID集合
+const approvedAppealIds = computed(() =>
+  appeals.value.filter((a) => a.status === 'approved').map((a) => a.recordId)
+)
+
 const empRecords = computed(() => {
   const rules = rulesStore.rules
   const empRecs = records.value.filter((r) => r.employeeId === targetId.value)
-  return calcAll(empRecs, rules, leaves.value)
+  return calcAll(empRecs, rules, leaves.value, approvedAppealIds.value)
 })
 
 const empLeaves = computed(() => {
@@ -170,14 +176,16 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes, lvRes] = await Promise.all([
+    const [empRes, recRes, lvRes, appealRes] = await Promise.all([
       request.get('/employees'),
       request.get('/attendanceRecords'),
-      request.get('/leaveRecords')
+      request.get('/leaveRecords'),
+      request.get('/appeals')
     ])
     employees.value = empRes.data
     records.value = recRes.data
     leaves.value = lvRes.data
+    appeals.value = appealRes.data
     ranking.value = computeRanking(records.value, employees.value, rulesStore.rules)
 
     // 检查可见性

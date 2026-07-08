@@ -293,6 +293,7 @@ const loading = ref(false)
 const employees = ref([])
 const records = ref([])
 const leaves = ref([])
+const appeals = ref([])
 const viewMode = ref('table')
 
 // P2-03 日历视图
@@ -358,6 +359,11 @@ const empMap = computed(() => {
   return m
 })
 
+// 已通过申诉的考勤记录ID集合
+const approvedAppealIds = computed(() =>
+  appeals.value.filter((a) => a.status === 'approved').map((a) => a.recordId)
+)
+
 // 计算状态后的记录（附带员工信息）
 const computedRecords = computed(() => {
   const rules = rulesStore.rules
@@ -392,7 +398,7 @@ const computedRecords = computed(() => {
       cur.setDate(cur.getDate() + 1)
     }
   })
-  const calc = calcAll(merged, rules, leaves.value)
+  const calc = calcAll(merged, rules, leaves.value, approvedAppealIds.value)
   const map = empMap.value
   return calc.map((r) => {
     const emp = map[r.employeeId] || {}
@@ -439,14 +445,18 @@ onMounted(async () => {
     if (auth.role === 'employee') recordParams.employeeId = auth.employeeId
     const leaveParams = {}
     if (auth.role === 'employee') leaveParams.employeeId = auth.employeeId
-    const [empRes, recRes, leaveRes] = await Promise.all([
+    const appealParams = {}
+    if (auth.role === 'employee') appealParams.employeeId = auth.employeeId
+    const [empRes, recRes, leaveRes, appealRes] = await Promise.all([
       request.get('/employees'),
       request.get('/attendanceRecords', { params: recordParams }),
-      request.get('/leaveRecords', { params: leaveParams })
+      request.get('/leaveRecords', { params: leaveParams }),
+      request.get('/appeals', { params: appealParams })
     ])
     employees.value = empRes.data
     records.value = recRes.data
     leaves.value = leaveRes.data
+    appeals.value = appealRes.data
     // 按日期升序
     records.value.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   } finally {

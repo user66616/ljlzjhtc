@@ -238,6 +238,7 @@ const rulesStore = useRulesStore()
 const loading = ref(false)
 const employees = ref([])
 const records = ref([])
+const appeals = ref([])
 
 const trendRef = ref()
 const deptRef = ref()
@@ -260,10 +261,15 @@ const empMap = computed(() => {
   return m
 })
 
+// 已通过申诉的考勤记录ID集合
+const approvedAppealIds = computed(() =>
+  appeals.value.filter((a) => a.status === 'approved').map((a) => a.recordId)
+)
+
 // 计算状态并附加员工信息
 const computedRecords = computed(() => {
   const rules = rulesStore.rules
-  const calc = calcAll(records.value, rules)
+  const calc = calcAll(records.value, rules, [], approvedAppealIds.value)
   const map = empMap.value
   return calc.map((r) => {
     const emp = map[r.employeeId] || {}
@@ -664,12 +670,14 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes] = await Promise.all([
+    const [empRes, recRes, appealRes] = await Promise.all([
       request.get('/employees', { params: { _t: Date.now() } }),
-      request.get('/attendanceRecords', { params: { _t: Date.now() } })
+      request.get('/attendanceRecords', { params: { _t: Date.now() } }),
+      request.get('/appeals', { params: { _t: Date.now() } })
     ])
     employees.value = empRes.data
     records.value = recRes.data
+    appeals.value = appealRes.data
     await nextTick()
     renderCharts()
     window.addEventListener('resize', resizeCharts)

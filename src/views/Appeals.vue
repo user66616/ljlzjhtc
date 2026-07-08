@@ -297,7 +297,8 @@ const appealRecordMap = computed(() => {
 
 const myExceptionRecords = computed(() => {
   const rules = rulesStore.rules
-  const calc = calcAll(myRecords.value, rules)
+  const approvedIds = appeals.value.filter((a) => a.status === 'approved').map((a) => a.recordId)
+  const calc = calcAll(myRecords.value, rules, [], approvedIds)
   return calc
     .filter((r) => ['late', 'early', 'missing', 'absent'].includes(r.status))
     .map((r) => ({
