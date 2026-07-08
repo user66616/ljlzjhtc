@@ -23,6 +23,34 @@
       </div>
     </div>
 
+    <!-- 员工快速搜索模块 -->
+    <div class="glass-card search-card fade-up">
+      <div class="card-title">
+        <el-icon><User /></el-icon><span>快速跳转员工主页</span>
+        <span class="card-sub">搜索姓名或工号，点击直接查看员工热力图与考勤详情</span>
+      </div>
+      <div class="search-bar">
+        <el-select
+          v-model="selectedEmp"
+          filterable
+          placeholder="请输入姓名或工号搜索"
+          @change="onEmpSelect"
+          style="flex: 1; max-width: 420px"
+          size="default"
+          value-key="employeeId"
+        >
+          <el-option
+            v-for="emp in searchableEmployees"
+            :key="emp.employeeId"
+            :label="`${emp.name}（${emp.employeeId}）· ${emp.dept || '无部门'}`"
+            :value="emp"
+          />
+        </el-select>
+        <el-button type="primary" :icon="Search" @click="onSearchEmp">搜索并跳转</el-button>
+        <el-button v-if="auth.role === 'employee'" :icon="Avatar" @click="goProfile({ employeeId: auth.employeeId })">我的主页</el-button>
+      </div>
+    </div>
+
     <!-- P2-06 同环比指标 -->
     <div class="glass-card mom-card fade-up" v-if="auth.role !== 'employee'">
       <div class="card-title">
@@ -197,8 +225,9 @@ import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
   TrendCharts, Histogram, Trophy, Warning, DataLine, AlarmClock, Clock, Timer,
-  PieChart, DataAnalysis, WarningFilled, Top, Bottom
+  PieChart, DataAnalysis, WarningFilled, Top, Bottom, Search, User, Avatar
 } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
 import { useRulesStore } from '../stores/rules'
@@ -474,6 +503,34 @@ const alertEmployees = computed(() => {
   })
   return result.sort((a, b) => b.consecutiveLate - a.consecutiveLate)
 })
+
+// 可搜索的员工列表（按角色权限过滤）
+const searchableEmployees = computed(() => {
+  if (auth.role === 'admin') return employees.value
+  if (auth.role === 'manager') return employees.value.filter((e) => e.dept === auth.dept)
+  return employees.value.filter((e) => e.employeeId === auth.employeeId)
+})
+
+const searchKeyword = ref('')
+const selectedEmp = ref(null)
+
+function onSearchEmp() {
+  const kw = searchKeyword.value.trim().toLowerCase()
+  if (!kw) return
+  const matched = searchableEmployees.value.find(
+    (e) => e.employeeId.toLowerCase() === kw || e.name.toLowerCase().includes(kw)
+  )
+  if (matched) {
+    selectedEmp.value = matched
+    goProfile(matched)
+  } else {
+    ElMessage.warning('未找到匹配的员工')
+  }
+}
+
+function onEmpSelect(emp) {
+  if (emp) goProfile(emp)
+}
 
 const router = useRouter()
 function goProfile(row) {
@@ -834,4 +891,22 @@ onBeforeUnmount(() => {
   margin-bottom: 20px;
   border-left: 4px solid #ef4444;
 }
+
+/* 员工快速搜索 */
+.search-card {
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+  .search-bar .el-select {
+    max-width: 100% !important;
+  }
+}
+
 </style>
