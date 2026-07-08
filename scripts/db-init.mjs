@@ -51,6 +51,8 @@ CREATE TABLE attendance_records (
   check_in          VARCHAR(5)  NULL,
   check_out         VARCHAR(5)  NULL,
   overtime_minutes  INT NOT NULL DEFAULT 0,
+  handle_status     ENUM('pending','handled') NOT NULL DEFAULT 'pending',
+  remark            VARCHAR(255) NULL,
   created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_emp_date (employee_id, date),
   INDEX idx_date (date)

@@ -21,7 +21,9 @@ function toCamel(r) {
     date: fmtDate(r.date),
     checkIn: r.check_in,
     checkOut: r.check_out,
-    overtimeMinutes: r.overtime_minutes
+    overtimeMinutes: r.overtime_minutes,
+    handleStatus: r.handle_status,
+    remark: r.remark
   }
 }
 
@@ -82,6 +84,25 @@ router.put('/:id', async (req, res) => {
     res.json(toCamel(rows[0]))
   } catch (e) {
     res.status(500).json({ message: '修改考勤记录失败：' + e.message })
+  }
+})
+
+// PATCH /api/attendanceRecords/:id —— 更新处理状态或备注
+router.patch('/:id', async (req, res) => {
+  try {
+    const { handleStatus, remark } = req.body
+    const fields = []
+    const params = []
+    if (handleStatus !== undefined) { fields.push('handle_status = ?'); params.push(handleStatus) }
+    if (remark !== undefined) { fields.push('remark = ?'); params.push(remark) }
+    if (fields.length === 0) return res.status(400).json({ message: '没有需要更新的字段' })
+    params.push(req.params.id)
+    await req.app.get('pool').execute(`UPDATE attendance_records SET ${fields.join(', ')} WHERE id = ?`, params)
+    const [rows] = await req.app.get('pool').query('SELECT * FROM attendance_records WHERE id = ?', [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ message: '记录不存在' })
+    res.json(toCamel(rows[0]))
+  } catch (e) {
+    res.status(500).json({ message: '更新处理状态失败：' + e.message })
   }
 })
 

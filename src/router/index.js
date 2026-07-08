@@ -33,6 +33,18 @@ const routes = [
         meta: { roles: ['admin'], title: '规则配置' }
       },
       {
+        path: 'exceptions',
+        name: 'exceptions',
+        component: () => import('../views/Exceptions.vue'),
+        meta: { roles: ['admin', 'manager'], title: '异常处理' }
+      },
+      {
+        path: 'reports',
+        name: 'reports',
+        component: () => import('../views/Reports.vue'),
+        meta: { roles: ['admin', 'manager'], title: '月报中心' }
+      },
+      {
         path: 'employee/:employeeId',
         name: 'employee-profile',
         component: () => import('../views/EmployeeProfile.vue'),

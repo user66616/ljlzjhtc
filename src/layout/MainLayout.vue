@@ -87,6 +87,8 @@ const allMenus = [
   { path: '/dashboard', title: '统计看板', icon: 'DataAnalysis', roles: ['admin', 'manager', 'employee'] },
   { path: '/import', title: '数据导入', icon: 'UploadFilled', roles: ['admin'] },
   { path: '/records', title: '考勤记录', icon: 'Document', roles: ['admin', 'manager', 'employee'] },
+  { path: '/exceptions', title: '异常处理', icon: 'WarningFilled', roles: ['admin', 'manager'] },
+  { path: '/reports', title: '月报中心', icon: 'Document', roles: ['admin', 'manager'] },
   { path: '/rules', title: '规则配置', icon: 'Setting', roles: ['admin'] }
 ]
 
