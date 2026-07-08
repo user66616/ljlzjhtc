@@ -42,7 +42,25 @@ router.post('/', async (req, res) => {
   }
 })
 
-// DELETE /api/workCalendar/:date
+// DELETE /api/workCalendar —— 批量删除（body: { dates: ['YYYY-MM-DD', ...] }）
+router.delete('/', async (req, res) => {
+  try {
+    const { dates } = req.body || {}
+    if (!Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ message: '请传入要删除的日期数组' })
+    }
+    const placeholders = dates.map(() => '?').join(',')
+    const [result] = await req.app.get('pool').execute(
+      `DELETE FROM work_calendar WHERE date IN (${placeholders})`,
+      dates
+    )
+    res.json({ deleted: result.affectedRows })
+  } catch (e) {
+    res.status(500).json({ message: '批量删除失败：' + e.message })
+  }
+})
+
+// DELETE /api/workCalendar/:date —— 单条删除
 router.delete('/:date', async (req, res) => {
   try {
     await req.app.get('pool').execute('DELETE FROM work_calendar WHERE date = ?', [req.params.date])

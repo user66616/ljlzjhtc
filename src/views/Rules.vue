@@ -137,8 +137,20 @@
         <el-input v-model="calForm.label" placeholder="标签（如：国庆节）" style="width: 160px" />
         <el-button type="primary" :icon="Plus" @click="addCalendar">添加</el-button>
         <el-button type="default" @click="genWeekends">自动填充今年周末</el-button>
+        <el-button type="danger" :icon="Delete" :disabled="calSelected.length === 0" @click="batchDelCalendar">
+          批量删除<span v-if="calSelected.length > 0">({{ calSelected.length }})</span>
+        </el-button>
       </div>
-      <el-table :data="calendar" border size="small" max-height="280" style="margin-top: 16px" v-loading="calLoading">
+      <el-table
+        :data="calendar"
+        border
+        size="small"
+        max-height="280"
+        style="margin-top: 16px"
+        v-loading="calLoading"
+        @selection-change="(rows) => calSelected = rows.map((r) => r.date)"
+      >
+        <el-table-column type="selection" width="50" align="center" />
         <el-table-column prop="date" label="日期" width="120" />
         <el-table-column label="类型" width="100">
           <template #default="{ row }">
@@ -204,7 +216,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Setting, Check, RefreshRight, View, Refresh, Cpu, Calendar, DocumentRemove, Plus, Clock
+  Setting, Check, RefreshRight, View, Refresh, Cpu, Calendar, DocumentRemove, Plus, Clock, Delete
 } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useRulesStore } from '../stores/rules'
@@ -295,12 +307,14 @@ async function onRecalc() {
 const calendar = ref([])
 const calLoading = ref(false)
 const calForm = reactive({ date: '', dayType: 'holiday', label: '' })
+const calSelected = ref([])
 
 async function loadCalendar() {
   calLoading.value = true
   try {
     const res = await request.get('/workCalendar')
     calendar.value = res.data
+    calSelected.value = calSelected.value.filter((d) => calendar.value.some((c) => c.date === d))
   } finally { calLoading.value = false }
 }
 
@@ -318,6 +332,18 @@ async function addCalendar() {
 async function delCalendar(date) {
   await request.delete(`/workCalendar/${date}`)
   ElMessage.success('已删除')
+  await loadCalendar()
+}
+
+async function batchDelCalendar() {
+  if (calSelected.value.length === 0) {
+    ElMessage.warning('请先选择要删除的日期')
+    return
+  }
+  await ElMessageBox.confirm(`确认删除选中的 ${calSelected.value.length} 条日历记录？`, '批量删除', { type: 'warning' })
+  await request.delete('/workCalendar', { data: { dates: calSelected.value } })
+  ElMessage.success(`已删除 ${calSelected.value.length} 条`)
+  calSelected.value = []
   await loadCalendar()
 }
 
