@@ -88,6 +88,7 @@ const GAP = 3
 const WD_W = 28
 
 const now = new Date()
+const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 const yearVal = ref(String(now.getFullYear()))
 const year = computed(() => Number(yearVal.value))
 
@@ -217,6 +218,11 @@ function buildGrid() {
         color = '#ebedf0'
         status = null
         detail = '周末休息'
+      } else if (key > todayStr) {
+        // 还没到那一天，不记缺勤，用浅灰占位
+        color = '#f3f4f6'
+        status = null
+        detail = '未到来'
       } else {
         // 工作日但无记录 = 缺勤（红色）
         color = STATUS_COLORS.absent
@@ -302,8 +308,8 @@ function hoverCell(e, day) {
   if (!day.inYear) return
   const rect = gridRef.value.getBoundingClientRect()
   const cellRect = e.target.getBoundingClientRect()
-  let statusLabel = '休息'
-  let statusColor = '#9ca3af'
+  let statusLabel = day.detail === '未到来' ? '未到来' : '休息'
+  let statusColor = day.detail === '未到来' ? '#d1d5db' : '#9ca3af'
   if (day.status === 'absent') {
     statusLabel = '缺勤'
     statusColor = STATUS_COLORS.absent
