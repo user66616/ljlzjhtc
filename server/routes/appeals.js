@@ -4,10 +4,9 @@ const router = Router()
 
 function fmtDateTime(d) {
   if (!d) return null
-  if (d instanceof Date) {
-    return d.toISOString().replace('T', ' ').slice(0, 19)
-  }
-  return d
+  const dt = d instanceof Date ? d : new Date(d)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`
 }
 
 function toCamel(r) {
