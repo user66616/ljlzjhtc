@@ -22,7 +22,7 @@
       <el-select v-if="reportType === 'personal'" v-model="selectedEmp" placeholder="选择员工" filterable style="width: 200px; margin-left: 16px">
         <el-option v-for="e in employees" :key="e.employeeId" :label="`${e.name} (${e.employeeId})`" :value="e.employeeId" />
       </el-select>
-      <el-select v-else v-model="selectedDept" placeholder="选择部门" clearable style="width: 160px; margin-left: 16px">
+      <el-select v-else-if="auth.role === 'admin'" v-model="selectedDept" placeholder="选择部门" clearable style="width: 160px; margin-left: 16px">
         <el-option v-for="d in deptOptions" :key="d" :label="d" :value="d" />
       </el-select>
       <el-button type="success" plain :icon="Download" @click="onExport" style="margin-left: 16px">导出 CSV</el-button>
@@ -212,6 +212,8 @@ onMounted(async () => {
     records.value = recRes.data
     // 默认选中第一个员工
     if (employees.value.length > 0) selectedEmp.value = employees.value[0].employeeId
+    // 经理端默认只统计本部门
+    if (auth.role === 'manager' && auth.dept) selectedDept.value = auth.dept
   } finally {
     loading.value = false
   }
