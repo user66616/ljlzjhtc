@@ -21,16 +21,30 @@ function toCamel(r) {
     reviewNote: r.review_note,
     createdAt: fmtDateTime(r.created_at),
     reviewedAt: fmtDateTime(r.reviewed_at),
-    recordDate: r.record_date || null,
+    recordDate: fmtDate(r.date) || r.record_date || null,
     recordStatus: r.record_status || null
   }
+}
+
+function fmtDate(d) {
+  if (!d) return null
+  if (d instanceof Date) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  if (typeof d === 'string') return d.slice(0, 10)
+  return d
 }
 
 // GET /api/appeals
 router.get('/', async (req, res) => {
   try {
     const { status, employeeId } = req.query
-    let sql = 'SELECT a.* FROM attendance_appeals a'
+    let sql = `SELECT a.*, r.date, r.check_in, r.check_out
+               FROM attendance_appeals a
+               LEFT JOIN attendance_records r ON a.record_id = r.id`
     const params = []
     const where = []
     if (status) { where.push('a.status = ?'); params.push(status) }
