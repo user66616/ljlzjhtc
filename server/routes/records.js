@@ -50,4 +50,39 @@ router.post('/', async (req, res) => {
   }
 })
 
+// DELETE /api/attendanceRecords —— 清空指定日期范围内的记录（不传日期则清空全部）
+router.delete('/', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.body || {}
+    let sql, params
+    if (startDate && endDate) {
+      sql = 'DELETE FROM attendance_records WHERE date >= ? AND date <= ?'
+      params = [startDate, endDate]
+    } else {
+      sql = 'DELETE FROM attendance_records'
+      params = []
+    }
+    const [result] = await req.app.get('pool').execute(sql, params)
+    res.json({ deleted: result.affectedRows })
+  } catch (e) {
+    res.status(500).json({ message: '清空考勤记录失败：' + e.message })
+  }
+})
+
+// PUT /api/attendanceRecords/:id —— 修改单条记录
+router.put('/:id', async (req, res) => {
+  try {
+    const { checkIn, checkOut } = req.body
+    await req.app.get('pool').execute(
+      'UPDATE attendance_records SET check_in = ?, check_out = ? WHERE id = ?',
+      [checkIn || null, checkOut || null, req.params.id]
+    )
+    const [rows] = await req.app.get('pool').query('SELECT * FROM attendance_records WHERE id = ?', [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ message: '记录不存在' })
+    res.json(toCamel(rows[0]))
+  } catch (e) {
+    res.status(500).json({ message: '修改考勤记录失败：' + e.message })
+  }
+})
+
 export default router

@@ -125,8 +125,16 @@
         </div>
         <div class="detail-section">
           <h4>打卡信息</h4>
-          <div class="detail-row"><span>上班打卡</span><b>{{ detail.row.checkIn || '未打卡' }}</b></div>
-          <div class="detail-row"><span>下班打卡</span><b>{{ detail.row.checkOut || '未打卡' }}</b></div>
+          <div class="detail-row" v-if="!detail.editing"><span>上班打卡</span><b>{{ detail.row.checkIn || '未打卡' }}</b></div>
+          <div class="detail-row" v-if="!detail.editing"><span>下班打卡</span><b>{{ detail.row.checkOut || '未打卡' }}</b></div>
+          <div class="detail-row" v-if="detail.editing">
+            <span>上班打卡</span>
+            <el-time-select v-model="detail.editForm.checkIn" start="06:00" step="00:05" end="12:00" placeholder="选择时间" clearable style="width: 140px" />
+          </div>
+          <div class="detail-row" v-if="detail.editing">
+            <span>下班打卡</span>
+            <el-time-select v-model="detail.editForm.checkOut" start="15:00" step="00:05" end="23:59" placeholder="选择时间" clearable style="width: 140px" />
+          </div>
         </div>
         <div class="detail-section">
           <h4>状态计算明细</h4>
@@ -143,6 +151,16 @@
         <div class="detail-section" v-if="detail.row.__calcTrace">
           <h4>判定过程</h4>
           <div class="calc-trace" v-for="(t, i) in detail.row.__calcTrace" :key="i">{{ t }}</div>
+        </div>
+        <!-- P1-09 单条记录修正 -->
+        <div class="detail-actions" v-if="auth.role === 'admin' || auth.role === 'manager'">
+          <template v-if="!detail.editing">
+            <el-button type="primary" plain @click="startEdit">修改打卡时间</el-button>
+          </template>
+          <template v-else>
+            <el-button type="primary" :loading="detail.saving" @click="saveEdit">保存修改</el-button>
+            <el-button @click="detail.editing = false">取消</el-button>
+          </template>
         </div>
       </template>
     </el-drawer>
@@ -287,7 +305,7 @@ function goImport() {
 }
 
 // P1-07 记录详情抽屉
-const detail = reactive({ show: false, row: null })
+const detail = reactive({ show: false, row: null, editing: false, editForm: { checkIn: '', checkOut: '' }, saving: false })
 
 function openDetail(row) {
   // 生成判定过程说明
@@ -309,7 +327,42 @@ function openDetail(row) {
     if (row.isOvertime) trace.push(`加班 ${row.overtimeMinutes} 分钟`)
   }
   detail.row = { ...row, __calcTrace: trace }
+  detail.editing = false
   detail.show = true
+}
+
+// P1-09 单条记录修正
+function startEdit() {
+  detail.editForm = {
+    checkIn: detail.row.checkIn || '',
+    checkOut: detail.row.checkOut || ''
+  }
+  detail.editing = true
+}
+
+async function saveEdit() {
+  detail.saving = true
+  try {
+    const updated = await request.put(`/attendanceRecords/${detail.row.id}`, {
+      checkIn: detail.editForm.checkIn || null,
+      checkOut: detail.editForm.checkOut || null
+    })
+    // 更新本地记录
+    const idx = records.value.findIndex((r) => r.id === detail.row.id)
+    if (idx !== -1) {
+      records.value[idx] = { ...records.value[idx], checkIn: updated.data.checkIn, checkOut: updated.data.checkOut }
+    }
+    ElMessage.success('修改成功，状态已重新计算')
+    detail.editing = false
+    // 重新生成判定明细
+    const recalced = computedRecords.value.find((r) => r.id === detail.row.id)
+    if (recalced) openDetail(recalced)
+    else detail.show = false
+  } catch (e) {
+    // 错误已由拦截器提示
+  } finally {
+    detail.saving = false
+  }
 }
 </script>
 
@@ -381,5 +434,10 @@ function openDetail(row) {
   background: #f9fafb;
   border-radius: 4px;
   border-left: 3px solid var(--brand);
+}
+.detail-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
 }
 </style>

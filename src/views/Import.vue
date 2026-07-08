@@ -75,6 +75,9 @@
           确认导入（{{ dedupedRows.length }} 条）
         </el-button>
         <el-button :icon="RefreshLeft" @click="reset">重新上传</el-button>
+        <el-button type="danger" plain :icon="Download" v-if="errorRows.length" @click="exportErrors">
+          导出错误清单（{{ errorRows.length }} 条）
+        </el-button>
       </div>
     </div>
 
@@ -103,22 +106,48 @@
         <el-button @click="reset">继续导入</el-button>
       </div>
     </div>
+
+    <!-- P1-05 清空数据 -->
+    <div class="glass-card fade-up step-card" v-if="auth.role === 'admin'">
+      <div class="card-title">
+        <el-icon><Delete /></el-icon>
+        <span>数据管理 · 清空考勤记录</span>
+      </div>
+      <div class="clear-row">
+        <el-date-picker
+          v-model="clearRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          :clearable="true"
+          style="width: 260px"
+        />
+        <el-button type="danger" plain :icon="Delete" :loading="clearing" @click="onClear">
+          清空指定范围内记录
+        </el-button>
+      </div>
+      <div class="clear-tip">注：清空操作不可恢复，请谨慎操作。不选日期则清空全部记录。</div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   UploadFilled, Document, Download, DocumentChecked, Check,
-  RefreshLeft, CircleCheckFilled
+  RefreshLeft, CircleCheckFilled, Delete
 } from '@element-plus/icons-vue'
 import request from '../api/request'
-import { parseCSV } from '../utils/csv'
+import { parseCSV, toCSV, downloadCSV } from '../utils/csv'
 import { isValidTime } from '../utils/attendance'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const auth = useAuthStore()
 const REQUIRED_FIELDS = ['employeeId', 'date']
 
 const parsed = ref(null) // { headers, rows }
@@ -228,6 +257,63 @@ function reset() {
 }
 function goRecords() {
   router.push('/records')
+}
+
+// P1-03 导出错误清单
+function exportErrors() {
+  if (errorRows.value.length === 0) {
+    ElMessage.warning('没有错误记录可导出')
+    return
+  }
+  const rows = errorRows.value.map((r, i) => ({
+    row: i + 1,
+    employeeId: r.employeeId || '',
+    date: r.date || '',
+    checkIn: r.checkIn || '',
+    checkOut: r.checkOut || '',
+    errors: (r.__errors || []).join('；')
+  }))
+  const csv = toCSV(rows, ['row', 'employeeId', 'date', 'checkIn', 'checkOut', 'errors'])
+  downloadCSV(`错误清单_${new Date().toISOString().slice(0, 10)}.csv`, csv)
+  ElMessage.success(`已导出 ${rows.length} 条错误记录`)
+}
+
+// P1-05 清空数据
+const clearRange = ref(null)
+const clearing = ref(false)
+
+async function onClear() {
+  let confirmText = '确定要清空考勤记录吗？'
+  if (clearRange.value && clearRange.value.length === 2) {
+    confirmText = `确定要清空 ${clearRange.value[0]} 至 ${clearRange.value[1]} 的考勤记录吗？`
+  } else {
+    confirmText = '未选择日期范围，将清空全部考勤记录！确定继续吗？'
+  }
+  try {
+    await ElMessageBox.confirm(confirmText, '危险操作', {
+      type: 'warning',
+      confirmButtonText: '确认清空',
+      cancelButtonText: '取消',
+      confirmButtonClass: 'el-button--danger'
+    })
+  } catch {
+    return
+  }
+  clearing.value = true
+  try {
+    const params = {}
+    if (clearRange.value && clearRange.value.length === 2) {
+      params.startDate = clearRange.value[0]
+      params.endDate = clearRange.value[1]
+    }
+    const res = await request.delete('/attendanceRecords', { data: params })
+    ElMessage.success(`已清空 ${res.data.deleted} 条记录`)
+    clearRange.value = null
+  } catch (e) {
+    // 错误已由拦截器提示
+  } finally {
+    clearing.value = false
+  }
 }
 </script>
 
@@ -380,5 +466,16 @@ function goRecords() {
 .result-actions {
   display: flex;
   gap: 12px;
+}
+
+.clear-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.clear-tip {
+  font-size: 12px;
+  color: var(--text-2);
 }
 </style>
