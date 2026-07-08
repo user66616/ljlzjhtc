@@ -8,6 +8,9 @@ dist/
 dist-ssr/
 *.local
 
+# Vite 缓存
+.vite/
+
 # 日志
 logs
 *.log
