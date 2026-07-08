@@ -36,7 +36,6 @@
           <el-input v-model="filters.keyword" placeholder="姓名/工号" clearable style="width: 140px" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search" @click="onSearch">查询</el-button>
           <el-button :icon="RefreshLeft" @click="onReset">重置</el-button>
         </el-form-item>
       </el-form>
@@ -73,8 +72,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { Search, RefreshLeft } from '@element-plus/icons-vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { RefreshLeft } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
 import { useRulesStore } from '../stores/rules'
@@ -180,7 +179,11 @@ onMounted(async () => {
   }
 })
 
-function onSearch() { page.current = 1 }
+watch(
+  () => [filters.dateRange, filters.status, filters.dept, filters.keyword],
+  () => { page.current = 1 }
+)
+
 function onReset() {
   filters.status = ''
   filters.dept = ''

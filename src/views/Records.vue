@@ -45,7 +45,6 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search" @click="onSearch">查询</el-button>
           <el-button :icon="RefreshLeft" @click="onReset">重置</el-button>
           <el-button type="success" plain :icon="Download" @click="onExport">导出 CSV</el-button>
         </el-form-item>
@@ -434,9 +433,11 @@ onMounted(async () => {
   }
 })
 
-function onSearch() {
-  page.current = 1
-}
+watch(
+  () => [filters.dateRange, filters.dept, filters.keyword, filters.status],
+  () => { page.current = 1 }
+)
+
 function onReset() {
   filters.dateRange = null
   filters.dept = ''
