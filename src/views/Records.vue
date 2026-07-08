@@ -25,7 +25,7 @@
             <el-option v-for="d in deptOptions" :key="d" :label="d" :value="d" />
           </el-select>
         </el-form-item>
-        <el-form-item label="关键词">
+        <el-form-item label="关键词" v-if="auth.role !== 'employee'">
           <el-input
             v-model="filters.keyword"
             placeholder="姓名 / 工号"
