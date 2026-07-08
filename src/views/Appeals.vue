@@ -52,7 +52,13 @@
                 size="small"
                 @click="openAppealDialog(row)"
               >{{ row.appealStatus === 'rejected' ? '重新申诉' : '申诉' }}</el-button>
-              <span v-else-if="row.appealStatus === 'pending'" style="color:#909399; font-size:12px">审核中</span>
+              <el-button
+                v-else-if="row.appealStatus === 'pending'"
+                type="danger"
+                link
+                size="small"
+                @click="confirmRevoke(row.appealId)"
+              >撤销申诉</el-button>
               <span v-else style="color:#909399; font-size:12px">已处理</span>
             </template>
           </el-table-column>
@@ -224,7 +230,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { WarningFilled, Document } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
@@ -283,7 +289,7 @@ const appealRecordMap = computed(() => {
   const m = {}
   appeals.value.forEach((a) => {
     if (a.recordId && (a.status === 'pending' || !m[a.recordId])) {
-      m[a.recordId] = a.status
+      m[a.recordId] = { status: a.status, id: a.id }
     }
   })
   return m
@@ -294,7 +300,11 @@ const myExceptionRecords = computed(() => {
   const calc = calcAll(myRecords.value, rules)
   return calc
     .filter((r) => ['late', 'early', 'missing', 'absent'].includes(r.status))
-    .map((r) => ({ ...r, appealStatus: appealRecordMap.value[r.id] || null }))
+    .map((r) => ({
+      ...r,
+      appealStatus: appealRecordMap.value[r.id]?.status || null,
+      appealId: appealRecordMap.value[r.id]?.id || null
+    }))
     .sort((a, b) => b.date.localeCompare(a.date))
 })
 
@@ -346,6 +356,22 @@ async function submitAppeal() {
     // 拦截器提示
   } finally {
     submitDialog.saving = false
+  }
+}
+
+async function confirmRevoke(appealId) {
+  if (!appealId) return
+  try {
+    await ElMessageBox.confirm(
+      '确定要撤销这条申诉吗？撤销后可以重新提交。',
+      '撤销申诉',
+      { confirmButtonText: '确认撤销', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'el-button--danger' }
+    )
+    await request.delete(`/appeals/${appealId}`)
+    ElMessage.success('申诉已撤销')
+    await Promise.all([loadAppeals(), loadMyRecords()])
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '撤销失败')
   }
 }
 

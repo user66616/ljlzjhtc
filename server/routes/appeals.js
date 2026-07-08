@@ -98,4 +98,20 @@ router.patch('/:id', async (req, res) => {
   }
 })
 
+// DELETE /api/appeals/:id —— 员工撤销未审核的申诉
+router.delete('/:id', async (req, res) => {
+  try {
+    // 先查询申诉状态，只能撤销待审核的
+    const [rows] = await req.app.get('pool').query('SELECT * FROM attendance_appeals WHERE id = ?', [req.params.id])
+    if (rows.length === 0) return res.status(404).json({ message: '申诉不存在' })
+    if (rows[0].status !== 'pending') {
+      return res.status(400).json({ message: '只能撤销待审核的申诉' })
+    }
+    await req.app.get('pool').execute('DELETE FROM attendance_appeals WHERE id = ?', [req.params.id])
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ message: '撤销申诉失败：' + e.message })
+  }
+})
+
 export default router
