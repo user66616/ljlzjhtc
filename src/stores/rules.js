@@ -5,7 +5,9 @@ const DEFAULT_RULES = {
   lateAfter: '09:05',
   earlyBefore: '18:00',
   overtimeAfter: '18:30',
-  missingStrategy: 'mark'
+  missingStrategy: 'mark',
+  lunchStart: '12:00',
+  lunchEnd: '13:00'
 }
 
 export const useRulesStore = defineStore('rules', {

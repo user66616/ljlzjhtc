@@ -48,6 +48,14 @@
             </el-radio-group>
             <span class="field-hint">切换后统计结果对应变化</span>
           </el-form-item>
+          <el-divider content-position="left">午休配置（P2-05）</el-divider>
+          <el-form-item label="午休开始">
+            <el-time-picker v-model="form.lunchStart" format="HH:mm" value-format="HH:mm" placeholder="12:00" />
+            <span class="field-hint">加班时长自动扣除午休时段</span>
+          </el-form-item>
+          <el-form-item label="午休结束">
+            <el-time-picker v-model="form.lunchEnd" format="HH:mm" value-format="HH:mm" placeholder="13:00" />
+          </el-form-item>
         </el-form>
         <div class="form-actions">
           <el-button type="primary" :icon="Check" @click="onSave">保存规则</el-button>
@@ -69,6 +77,7 @@
             <span class="rl-label">缺卡策略</span>
             <b>{{ current.missingStrategy === 'absent' ? '缺卡当作缺勤' : '仅标记异常' }}</b>
           </li>
+          <li><span class="rl-label">午休时段</span><b>{{ current.lunchStart || '未设置' }} - {{ current.lunchEnd || '未设置' }}</b></li>
         </ul>
 
         <el-divider />
@@ -83,6 +92,31 @@
         <el-button type="success" plain :icon="Refresh" :loading="recalcing" @click="onRecalc" class="recalc-btn">
           立即重新计算
         </el-button>
+
+        <el-divider />
+
+        <!-- P2-04 规则版本管理 -->
+        <div class="card-title">
+          <el-icon><Clock /></el-icon>
+          <span>规则历史版本</span>
+        </div>
+        <el-table :data="versions" border size="small" max-height="240" v-loading="versionLoading">
+          <el-table-column prop="createdAt" label="保存时间" width="160">
+            <template #default="{ row }">{{ (row.createdAt || '').slice(0, 19) }}</template>
+          </el-table-column>
+          <el-table-column label="规则概要" min-width="200">
+            <template #default="{ row }">
+              迟到{{ row.lateAfter }} / 早退{{ row.earlyBefore }} / 加班{{ row.overtimeAfter }}
+              <span v-if="row.lunchStart"> / 午休{{ row.lunchStart }}-{{ row.lunchEnd }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="operator" label="操作人" width="100" />
+          <el-table-column label="操作" width="80" align="center">
+            <template #default="{ row }">
+              <el-button type="primary" link size="small" @click="rollback(row.id)">回滚</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </div>
 
@@ -168,14 +202,16 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Setting, Check, RefreshRight, View, Refresh, Cpu, Calendar, DocumentRemove, Plus
+  Setting, Check, RefreshRight, View, Refresh, Cpu, Calendar, DocumentRemove, Plus, Clock
 } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useRulesStore } from '../stores/rules'
+import { useAuthStore } from '../stores/auth'
 
 const rulesStore = useRulesStore()
+const auth = useAuthStore()
 const loading = ref(false)
 const recalcing = ref(false)
 
@@ -183,22 +219,60 @@ const DEFAULT_RULES = {
   lateAfter: '09:05',
   earlyBefore: '18:00',
   overtimeAfter: '18:30',
-  missingStrategy: 'mark'
+  missingStrategy: 'mark',
+  lunchStart: '12:00',
+  lunchEnd: '13:00'
 }
 
 const form = reactive({ ...DEFAULT_RULES })
 const current = reactive({ ...DEFAULT_RULES })
+
+// P2-04 规则版本
+const versions = ref([])
+const versionLoading = ref(false)
+
+async function loadVersions() {
+  versionLoading.value = true
+  try {
+    const { data } = await request.get('/ruleVersions')
+    versions.value = data
+  } finally { versionLoading.value = false }
+}
+
+async function logAction(action, detail) {
+  try {
+    await request.post('/operationLogs', { operator: auth.name || 'admin', action, detail })
+  } catch (e) { /* 忽略日志错误 */ }
+}
 
 async function onSave() {
   const payload = {
     lateAfter: form.lateAfter,
     earlyBefore: form.earlyBefore,
     overtimeAfter: form.overtimeAfter,
-    missingStrategy: form.missingStrategy
+    missingStrategy: form.missingStrategy,
+    lunchStart: form.lunchStart,
+    lunchEnd: form.lunchEnd
   }
   await rulesStore.save(payload)
   Object.assign(current, rulesStore.rules)
+  // 保存历史版本
+  await request.post('/ruleVersions', { ...payload, operator: auth.name || 'admin' })
+  await logAction('修改规则', JSON.stringify(payload))
+  await loadVersions()
   ElMessage.success('规则保存成功，已即时生效')
+}
+
+async function rollback(versionId) {
+  try {
+    await ElMessageBox.confirm('确认回滚到此历史版本？回滚后数据将同步重算。', '提示', { type: 'warning' })
+    const { data } = await request.post(`/ruleVersions/${versionId}/rollback`)
+    await rulesStore.load()
+    Object.assign(form, rulesStore.rules)
+    Object.assign(current, rulesStore.rules)
+    await logAction('回滚规则', `回滚到版本#${versionId}`)
+    ElMessage.success('已回滚，请点击「重新计算」刷新数据')
+  } catch (e) { /* 取消 */ }
 }
 
 function onReset() {
@@ -317,7 +391,7 @@ onMounted(async () => {
     const r = await rulesStore.load()
     Object.assign(form, r)
     Object.assign(current, r)
-    await Promise.all([loadCalendar(), loadEmployeesAndLeaves()])
+    await Promise.all([loadCalendar(), loadEmployeesAndLeaves(), loadVersions()])
   } finally {
     loading.value = false
   }

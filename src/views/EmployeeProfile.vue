@@ -37,12 +37,7 @@
 
       <!-- 热力图 -->
       <div class="glass-card heatmap-card fade-up">
-        <div class="card-title">
-          <el-icon><Grid /></el-icon>
-          <span>考勤热力图</span>
-          <span class="card-sub">（每个方格代表一天，颜色对应考勤状态）</span>
-        </div>
-        <AttendanceHeatmap :records="empRecords" />
+        <AttendanceHeatmap :records="empRecords" :leaves="empLeaves" />
       </div>
 
       <!-- 个人 KPI -->
@@ -122,6 +117,7 @@ const loading = ref(true)
 const allowed = ref(false)
 const employees = ref([])
 const records = ref([])
+const leaves = ref([])
 const ranking = ref({ ranked: [], top5: [], bottom5: [] })
 
 const targetId = computed(() => route.params.employeeId)
@@ -132,10 +128,12 @@ const emp = computed(() => {
 
 const empRecords = computed(() => {
   const rules = rulesStore.rules
-  return calcAll(
-    records.value.filter((r) => r.employeeId === targetId.value),
-    rules
-  )
+  const empRecs = records.value.filter((r) => r.employeeId === targetId.value)
+  return calcAll(empRecs, rules, leaves.value)
+})
+
+const empLeaves = computed(() => {
+  return leaves.value.filter((l) => l.employeeId === targetId.value)
 })
 
 const summaryData = computed(() => summarize(empRecords.value))
@@ -172,12 +170,14 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes] = await Promise.all([
+    const [empRes, recRes, lvRes] = await Promise.all([
       request.get('/employees'),
-      request.get('/attendanceRecords')
+      request.get('/attendanceRecords'),
+      request.get('/leaveRecords')
     ])
     employees.value = empRes.data
     records.value = recRes.data
+    leaves.value = lvRes.data
     ranking.value = computeRanking(records.value, employees.value, rulesStore.rules)
 
     // 检查可见性

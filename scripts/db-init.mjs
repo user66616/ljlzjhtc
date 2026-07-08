@@ -39,7 +39,86 @@ CREATE TABLE attendance_rules (
   early_before      VARCHAR(5) NOT NULL DEFAULT '18:00',
   overtime_after    VARCHAR(5) NOT NULL DEFAULT '18:30',
   missing_strategy  ENUM('mark','absent') NOT NULL DEFAULT 'mark',
+  lunch_start       VARCHAR(5) NULL DEFAULT '12:00',
+  lunch_end         VARCHAR(5) NULL DEFAULT '13:00',
   updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 规则版本历史表（P2-04）
+DROP TABLE IF EXISTS rule_versions;
+CREATE TABLE rule_versions (
+  id                INT AUTO_INCREMENT PRIMARY KEY,
+  late_after        VARCHAR(5) NOT NULL,
+  early_before      VARCHAR(5) NOT NULL,
+  overtime_after    VARCHAR(5) NOT NULL,
+  missing_strategy  ENUM('mark','absent') NOT NULL DEFAULT 'mark',
+  lunch_start       VARCHAR(5) NULL,
+  lunch_end         VARCHAR(5) NULL,
+  operator          VARCHAR(50) NOT NULL DEFAULT 'system',
+  created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 操作日志表（P2-17）
+DROP TABLE IF EXISTS operation_logs;
+CREATE TABLE operation_logs (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  operator     VARCHAR(50) NOT NULL,
+  action       VARCHAR(100) NOT NULL,
+  detail       TEXT NULL,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_operator (operator),
+  INDEX idx_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 考勤申诉表（P2-10）
+DROP TABLE IF EXISTS attendance_appeals;
+CREATE TABLE attendance_appeals (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  record_id    INT NOT NULL,
+  employee_id  VARCHAR(20) NOT NULL,
+  reason       VARCHAR(500) NOT NULL,
+  status       ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  reviewer     VARCHAR(50) NULL,
+  review_note  VARCHAR(500) NULL,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  reviewed_at  TIMESTAMP NULL DEFAULT NULL,
+  INDEX idx_emp (employee_id),
+  INDEX idx_status (status),
+  INDEX idx_record (record_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 数据备份表（P2-02）
+DROP TABLE IF EXISTS data_backups;
+CREATE TABLE data_backups (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  backup_name  VARCHAR(100) NOT NULL,
+  record_count INT NOT NULL DEFAULT 0,
+  operator     VARCHAR(50) NOT NULL DEFAULT 'system',
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 数据备份详情表（P2-02）
+DROP TABLE IF EXISTS data_backup_records;
+CREATE TABLE data_backup_records (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  backup_id    INT NOT NULL,
+  employee_id  VARCHAR(20) NOT NULL,
+  date         DATE NOT NULL,
+  check_in     VARCHAR(5) NULL,
+  check_out    VARCHAR(5) NULL,
+  overtime_minutes INT NOT NULL DEFAULT 0,
+  INDEX idx_backup (backup_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- AI 配置表（P2-14）
+DROP TABLE IF EXISTS ai_config;
+CREATE TABLE ai_config (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  api_key      VARCHAR(255) NOT NULL DEFAULT '',
+  api_url      VARCHAR(500) NOT NULL DEFAULT '',
+  model_name   VARCHAR(100) NOT NULL DEFAULT 'gpt-3.5-turbo',
+  enabled      TINYINT NOT NULL DEFAULT 0,
+  updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 工作日历表（P1-10）

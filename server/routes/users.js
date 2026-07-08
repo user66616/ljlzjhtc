@@ -28,4 +28,25 @@ router.get('/', async (req, res) => {
   }
 })
 
+// PUT /api/users/password —— 修改密码（P2-01）
+router.put('/password', async (req, res) => {
+  try {
+    const { userId, oldPassword, newPassword } = req.body
+    if (!userId || !oldPassword || !newPassword) {
+      return res.status(400).json({ message: '参数不完整' })
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: '新密码长度不能少于6位' })
+    }
+    const [rows] = await req.app.get('pool').query('SELECT * FROM users WHERE id = ? AND password = ?', [userId, oldPassword])
+    if (rows.length === 0) {
+      return res.status(400).json({ message: '原密码不正确' })
+    }
+    await req.app.get('pool').execute('UPDATE users SET password = ? WHERE id = ?', [newPassword, userId])
+    res.json({ ok: true, message: '密码修改成功，请重新登录' })
+  } catch (e) {
+    res.status(500).json({ message: '修改密码失败：' + e.message })
+  }
+})
+
 export default router

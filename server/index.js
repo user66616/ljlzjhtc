@@ -7,6 +7,11 @@ import rulesRouter from './routes/rules.js'
 import recordsRouter from './routes/records.js'
 import calendarRouter from './routes/calendar.js'
 import leavesRouter from './routes/leaves.js'
+import versionsRouter from './routes/versions.js'
+import logsRouter from './routes/logs.js'
+import appealsRouter from './routes/appeals.js'
+import backupsRouter from './routes/backups.js'
+import aiRouter from './routes/ai.js'
 
 const app = express()
 const PORT = 3001
@@ -24,6 +29,11 @@ app.use('/api/attendanceRules', rulesRouter)
 app.use('/api/attendanceRecords', recordsRouter)
 app.use('/api/workCalendar', calendarRouter)
 app.use('/api/leaveRecords', leavesRouter)
+app.use('/api/ruleVersions', versionsRouter)
+app.use('/api/operationLogs', logsRouter)
+app.use('/api/appeals', appealsRouter)
+app.use('/api/dataBackups', backupsRouter)
+app.use('/api/aiConfig', aiRouter)
 
 // 健康检查
 app.get('/api/health', async (req, res) => {

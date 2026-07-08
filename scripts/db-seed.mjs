@@ -29,7 +29,7 @@ const employees = [
 ]
 
 // ---- 默认规则 ----
-const rule = { lateAfter: '09:05', earlyBefore: '18:00', overtimeAfter: '18:30', missingStrategy: 'mark' }
+const rule = { lateAfter: '09:05', earlyBefore: '18:00', overtimeAfter: '18:30', missingStrategy: 'mark', lunchStart: '12:00', lunchEnd: '13:00' }
 
 // ---- 考勤记录生成（与原 gen-data.mjs 算法一致，保证可复现）----
 function getWorkdays(year, month, fromDay, toDay) {
@@ -101,17 +101,38 @@ function generateRecords() {
   return records
 }
 
+// 请假记录种子数据
+const leaveRecords = [
+  { employeeId: 'E001', startDate: '2026-07-08', endDate: '2026-07-09', leaveType: 'leave', reason: '事假' },
+  { employeeId: 'E003', startDate: '2026-07-15', endDate: '2026-07-16', leaveType: 'business_trip', reason: '出差' },
+  { employeeId: 'E006', startDate: '2026-07-20', endDate: '2026-07-20', leaveType: 'comp_off', reason: '调休' }
+]
+
 async function main() {
   console.log('正在写入种子数据...')
   // 清空数据（保留表结构）
   await pool.query('DELETE FROM attendance_records')
+  await pool.query('DELETE FROM leave_records')
   await pool.query('DELETE FROM attendance_rules')
   await pool.query('DELETE FROM employees')
   await pool.query('DELETE FROM users')
+  await pool.query('DELETE FROM rule_versions')
+  await pool.query('DELETE FROM operation_logs')
+  await pool.query('DELETE FROM attendance_appeals')
+  await pool.query('DELETE FROM data_backup_records')
+  await pool.query('DELETE FROM data_backups')
+  await pool.query('DELETE FROM ai_config')
   await pool.query('ALTER TABLE attendance_records AUTO_INCREMENT = 1')
+  await pool.query('ALTER TABLE leave_records AUTO_INCREMENT = 1')
   await pool.query('ALTER TABLE attendance_rules AUTO_INCREMENT = 1')
   await pool.query('ALTER TABLE employees AUTO_INCREMENT = 1')
   await pool.query('ALTER TABLE users AUTO_INCREMENT = 1')
+  await pool.query('ALTER TABLE rule_versions AUTO_INCREMENT = 1')
+  await pool.query('ALTER TABLE operation_logs AUTO_INCREMENT = 1')
+  await pool.query('ALTER TABLE attendance_appeals AUTO_INCREMENT = 1')
+  await pool.query('ALTER TABLE data_backup_records AUTO_INCREMENT = 1')
+  await pool.query('ALTER TABLE data_backups AUTO_INCREMENT = 1')
+  await pool.query('ALTER TABLE ai_config AUTO_INCREMENT = 1')
 
   // 用户
   for (const u of users) {
@@ -133,10 +154,17 @@ async function main() {
 
   // 规则
   await pool.execute(
-    'INSERT INTO attendance_rules (late_after, early_before, overtime_after, missing_strategy) VALUES (?, ?, ?, ?)',
-    [rule.lateAfter, rule.earlyBefore, rule.overtimeAfter, rule.missingStrategy]
+    'INSERT INTO attendance_rules (late_after, early_before, overtime_after, missing_strategy, lunch_start, lunch_end) VALUES (?, ?, ?, ?, ?, ?)',
+    [rule.lateAfter, rule.earlyBefore, rule.overtimeAfter, rule.missingStrategy, rule.lunchStart, rule.lunchEnd]
   )
-  console.log('✓ 写入默认考勤规则')
+  console.log('✓ 写入默认考勤规则（含午休配置）')
+
+  // AI 配置初始记录
+  await pool.execute(
+    'INSERT INTO ai_config (api_key, api_url, model_name, enabled) VALUES (?, ?, ?, ?)',
+    ['', 'https://api.openai.com/v1/chat/completions', 'gpt-3.5-turbo', 0]
+  )
+  console.log('✓ 写入 AI 配置初始记录')
 
   // 考勤记录（批量）
   const records = generateRecords()
@@ -146,6 +174,15 @@ async function main() {
     [values]
   )
   console.log(`✓ 写入 ${records.length} 条考勤记录`)
+
+  // 请假记录
+  for (const l of leaveRecords) {
+    await pool.execute(
+      'INSERT INTO leave_records (employee_id, start_date, end_date, leave_type, reason) VALUES (?, ?, ?, ?, ?)',
+      [l.employeeId, l.startDate, l.endDate, l.leaveType, l.reason]
+    )
+  }
+  console.log(`✓ 写入 ${leaveRecords.length} 条请假记录`)
 
   console.log('\n种子数据写入完成！现在可以运行 npm run dev 启动应用')
   await pool.end()

@@ -9,7 +9,9 @@ function toCamel(r) {
     lateAfter: r.late_after,
     earlyBefore: r.early_before,
     overtimeAfter: r.overtime_after,
-    missingStrategy: r.missing_strategy
+    missingStrategy: r.missing_strategy,
+    lunchStart: r.lunch_start,
+    lunchEnd: r.lunch_end
   }
 }
 
@@ -26,10 +28,10 @@ router.get('/', async (req, res) => {
 // POST /api/attendanceRules —— 新增规则
 router.post('/', async (req, res) => {
   try {
-    const { lateAfter, earlyBefore, overtimeAfter, missingStrategy } = req.body
+    const { lateAfter, earlyBefore, overtimeAfter, missingStrategy, lunchStart, lunchEnd } = req.body
     const [result] = await req.app.get('pool').execute(
-      'INSERT INTO attendance_rules (late_after, early_before, overtime_after, missing_strategy) VALUES (?, ?, ?, ?)',
-      [lateAfter, earlyBefore, overtimeAfter, missingStrategy]
+      'INSERT INTO attendance_rules (late_after, early_before, overtime_after, missing_strategy, lunch_start, lunch_end) VALUES (?, ?, ?, ?, ?, ?)',
+      [lateAfter, earlyBefore, overtimeAfter, missingStrategy, lunchStart || null, lunchEnd || null]
     )
     const [rows] = await req.app.get('pool').query('SELECT * FROM attendance_rules WHERE id = ?', [result.insertId])
     res.status(201).json(toCamel(rows[0]))
@@ -41,10 +43,10 @@ router.post('/', async (req, res) => {
 // PUT /api/attendanceRules/:id —— 更新规则
 router.put('/:id', async (req, res) => {
   try {
-    const { lateAfter, earlyBefore, overtimeAfter, missingStrategy } = req.body
+    const { lateAfter, earlyBefore, overtimeAfter, missingStrategy, lunchStart, lunchEnd } = req.body
     await req.app.get('pool').execute(
-      'UPDATE attendance_rules SET late_after = ?, early_before = ?, overtime_after = ?, missing_strategy = ? WHERE id = ?',
-      [lateAfter, earlyBefore, overtimeAfter, missingStrategy, req.params.id]
+      'UPDATE attendance_rules SET late_after = ?, early_before = ?, overtime_after = ?, missing_strategy = ?, lunch_start = ?, lunch_end = ? WHERE id = ?',
+      [lateAfter, earlyBefore, overtimeAfter, missingStrategy, lunchStart || null, lunchEnd || null, req.params.id]
     )
     const [rows] = await req.app.get('pool').query('SELECT * FROM attendance_rules WHERE id = ?', [req.params.id])
     res.json(toCamel(rows[0]))

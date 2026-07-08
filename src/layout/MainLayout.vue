@@ -43,6 +43,15 @@
         </div>
         <div class="header-right">
           <el-tag :type="roleTagType" effect="light" round>{{ roleLabel }}</el-tag>
+          <el-icon class="theme-btn" @click="theme.toggle()">
+            <Moon v-if="!theme.dark" />
+            <Sunny v-else />
+          </el-icon>
+          <el-badge :value="notifyCount" :max="99" :hidden="notifyCount === 0" class="notify-badge">
+            <el-icon class="notify-btn" @click="notifyVisible = true">
+              <Bell />
+            </el-icon>
+          </el-badge>
           <el-dropdown @command="onCommand">
             <span class="user-chip">
               <el-avatar :size="30" class="user-avatar">{{ avatarText }}</el-avatar>
@@ -51,7 +60,10 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout">
+                <el-dropdown-item command="password">
+                  <el-icon><Lock /></el-icon> 修改密码
+                </el-dropdown-item>
+                <el-dropdown-item command="logout" divided>
                   <el-icon><SwitchButton /></el-icon> 退出登录
                 </el-dropdown-item>
               </el-dropdown-menu>
@@ -70,18 +82,46 @@
       </el-main>
     </el-container>
   </el-container>
+
+  <!-- 修改密码弹窗 -->
+  <ChangePasswordDialog v-model="pwdVisible" />
+
+  <!-- 消息提醒抽屉 -->
+  <el-drawer v-model="notifyVisible" title="消息提醒" size="380px" direction="rtl">
+    <div class="notify-list">
+      <div v-for="n in notifyList" :key="n.id" class="notify-item" :class="'type-' + n.type">
+        <el-icon class="notify-icon">
+          <Warning v-if="n.type === 'exception'" />
+          <EditPen v-else-if="n.type === 'appeal'" />
+        </el-icon>
+        <div class="notify-body">
+          <div class="notify-text">{{ n.text }}</div>
+          <div class="notify-time">{{ n.time }}</div>
+        </div>
+      </div>
+      <el-empty v-if="notifyList.length === 0" description="暂无消息" />
+    </div>
+  </el-drawer>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '../stores/auth'
+import { useThemeStore } from '../stores/theme'
+import ChangePasswordDialog from '../components/ChangePasswordDialog.vue'
+import request from '../api/request'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const theme = useThemeStore()
+theme.init()
+
 const collapsed = ref(false)
+const pwdVisible = ref(false)
+const notifyVisible = ref(false)
 
 const allMenus = [
   { path: '/dashboard', title: '统计看板', icon: 'DataAnalysis', roles: ['admin', 'manager', 'employee'] },
@@ -89,7 +129,10 @@ const allMenus = [
   { path: '/records', title: '考勤记录', icon: 'Document', roles: ['admin', 'manager', 'employee'] },
   { path: '/exceptions', title: '异常处理', icon: 'WarningFilled', roles: ['admin', 'manager'] },
   { path: '/reports', title: '月报中心', icon: 'Document', roles: ['admin', 'manager'] },
-  { path: '/rules', title: '规则配置', icon: 'Setting', roles: ['admin'] }
+  { path: '/rules', title: '规则配置', icon: 'Setting', roles: ['admin'] },
+  { path: '/appeals', title: '考勤申诉', icon: 'ChatLineRound', roles: ['admin', 'manager', 'employee'] },
+  { path: '/ai-insight', title: '智能解读', icon: 'MagicStick', roles: ['admin', 'manager', 'employee'] },
+  { path: '/operation-logs', title: '操作日志', icon: 'List', roles: ['admin'] }
 ]
 
 const menus = computed(() => allMenus.filter((m) => m.roles.includes(auth.role)))
@@ -104,6 +147,47 @@ const roleTagType = computed(() => roleMap[auth.role]?.type || 'info')
 
 const avatarText = computed(() => (auth.name || '?').slice(0, 1))
 
+// 消息提醒
+const notifyList = ref([])
+const notifyCount = computed(() => notifyList.value.length)
+
+async function loadNotify() {
+  const list = []
+  try {
+    // 管理员/经理：待处理异常 + 待审核申诉
+    if (auth.role === 'admin' || auth.role === 'manager') {
+      const { data: records } = await request.get('/attendanceRecords')
+      const pending = records.filter((r) => r.handleStatus === 'pending')
+      const today = new Date().toISOString().slice(0, 10)
+      const recentPending = pending.filter((r) => r.date >= today.slice(0, 8) + '01')
+      if (recentPending.length > 0) {
+        list.push({ id: 'exc', type: 'exception', text: `${recentPending.length} 条异常考勤待处理`, time: '今日' })
+      }
+      const { data: appeals } = await request.get('/appeals', { params: { status: 'pending' } })
+      appeals.forEach((a) => {
+        list.push({ id: 'appeal-' + a.id, type: 'appeal', text: `${a.employeeId} 的申诉待审核`, time: (a.createdAt || '').slice(0, 16) })
+      })
+    }
+    // 员工：查看本人申诉状态变更
+    if (auth.role === 'employee' && auth.employeeId) {
+      const { data: appeals } = await request.get('/appeals', { params: { employeeId: auth.employeeId } })
+      appeals.forEach((a) => {
+        if (a.status !== 'pending') {
+          const statusText = a.status === 'approved' ? '已通过' : '已驳回'
+          list.push({ id: 'appeal-' + a.id, type: 'appeal', text: `您的申诉${statusText}`, time: (a.reviewedAt || '').slice(0, 16) })
+        }
+      })
+    }
+  } catch (e) {
+    console.error('加载消息失败', e)
+  }
+  notifyList.value = list
+}
+
+onMounted(() => {
+  loadNotify()
+})
+
 function onCommand(cmd) {
   if (cmd === 'logout') {
     ElMessageBox.confirm('确认退出登录吗？', '提示', { type: 'warning' })
@@ -112,6 +196,8 @@ function onCommand(cmd) {
         router.push('/login')
       })
       .catch(() => {})
+  } else if (cmd === 'password') {
+    pwdVisible.value = true
   }
 }
 </script>
@@ -168,7 +254,7 @@ function onCommand(cmd) {
 }
 
 .app-header {
-  background: #fff;
+  background: var(--card);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -194,6 +280,62 @@ function onCommand(cmd) {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+.theme-btn,
+.notify-btn {
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--text-2);
+  transition: color 0.2s;
+  padding: 6px;
+  border-radius: 8px;
+}
+.theme-btn:hover,
+.notify-btn:hover {
+  color: var(--brand);
+  background: var(--bg);
+}
+.notify-badge :deep(.el-badge__content) {
+  z-index: 1;
+}
+.notify-list {
+  padding: 0 12px;
+}
+.notify-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--bg);
+  transition: background 0.2s;
+}
+.notify-item:hover {
+  background: var(--el-color-primary-light-9);
+}
+.notify-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.notify-item.type-exception .notify-icon {
+  color: #ef4444;
+}
+.notify-item.type-appeal .notify-icon {
+  color: #f59e0b;
+}
+.notify-body {
+  flex: 1;
+  min-width: 0;
+}
+.notify-text {
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.notify-time {
+  font-size: 12px;
+  color: var(--text-3);
 }
 .user-chip {
   display: flex;

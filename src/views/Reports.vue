@@ -26,6 +26,7 @@
         <el-option v-for="d in deptOptions" :key="d" :label="d" :value="d" />
       </el-select>
       <el-button type="success" plain :icon="Download" @click="onExport" style="margin-left: 16px">导出 CSV</el-button>
+      <el-button type="primary" plain :icon="Printer" @click="onPrint" style="margin-left: 8px">打印</el-button>
     </div>
 
     <!-- 个人月报 -->
@@ -101,7 +102,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Download, User, OfficeBuilding } from '@element-plus/icons-vue'
+import { Download, User, OfficeBuilding, Printer } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
 import { useRulesStore } from '../stores/rules'
@@ -255,6 +256,15 @@ function onExport() {
     downloadCSV(`部门月报_${deptData.value.dept}_${month.value}.csv`, csv)
     ElMessage.success('月报导出成功')
   }
+}
+
+// P2-07 打印样式优化
+function onPrint() {
+  document.body.classList.add('print-mode')
+  setTimeout(() => {
+    window.print()
+    document.body.classList.remove('print-mode')
+  }, 100)
 }
 </script>
 

@@ -123,3 +123,149 @@ body {
 .el-menu {
   border-right: none !important;
 }
+
+/* 深色模式（P2-16） */
+html.dark-mode {
+  --brand: #3b82f6;
+  --brand-dark: #2563eb;
+  --brand-light: #1e3a5f;
+  --bg: #0f172a;
+  --card: #1e293b;
+  --text: #e2e8f0;
+  --text-2: #94a3b8;
+  --text-3: #64748b;
+  --border: #334155;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+html.dark-mode body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+html.dark-mode .el-card,
+html.dark-mode .el-dialog,
+html.dark-mode .el-drawer,
+html.dark-mode .el-table,
+html.dark-mode .el-table tr,
+html.dark-mode .el-table th.el-table__cell,
+html.dark-mode .el-table td.el-table__cell,
+html.dark-mode .el-picker-panel,
+html.dark-mode .el-select-dropdown,
+html.dark-mode .el-select__wrapper,
+html.dark-mode .el-input__wrapper,
+html.dark-mode .el-textarea__inner,
+html.dark-mode .el-date-editor.el-input,
+html.dark-mode .el-date-editor .el-range-input {
+  background-color: var(--card) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+
+html.dark-mode .el-table {
+  --el-table-bg-color: var(--card);
+  --el-table-tr-bg-color: var(--card);
+  --el-table-header-bg-color: #283548;
+  --el-table-row-hover-bg-color: #283548;
+  --el-table-border-color: var(--border);
+  --el-table-text-color: var(--text);
+  --el-table-header-text-color: var(--text);
+}
+
+html.dark-mode .el-input__wrapper,
+html.dark-mode .el-textarea__inner,
+html.dark-mode .el-select__wrapper {
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+}
+
+html.dark-mode .el-input__inner,
+html.dark-mode .el-textarea__inner {
+  color: var(--text) !important;
+}
+
+html.dark-mode .el-input__inner::placeholder,
+html.dark-mode .el-textarea__inner::placeholder {
+  color: var(--text-3) !important;
+}
+
+html.dark-mode .el-menu,
+html.dark-mode .el-menu--horizontal {
+  background-color: transparent !important;
+}
+
+html.dark-mode .el-pagination button,
+html.dark-mode .el-pagination .el-pager li {
+  background-color: var(--card) !important;
+  color: var(--text) !important;
+}
+
+html.dark-mode .el-pagination .el-pager li.is-active {
+  background-color: var(--brand) !important;
+  color: #fff !important;
+}
+
+html.dark-mode .el-tag {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+}
+
+html.dark-mode .el-empty__description p {
+  color: var(--text-2) !important;
+}
+
+html.dark-mode .el-breadcrumb__inner,
+html.dark-mode .el-breadcrumb__separator {
+  color: var(--text-2) !important;
+}
+
+/* P2-07 打印样式优化 */
+@media print {
+  body.print-mode {
+    background: #fff !important;
+  }
+  body.print-mode .el-aside,
+  body.print-mode .app-header,
+  body.print-mode .filter-bar,
+  body.print-mode .page-header .header-actions,
+  body.print-mode .el-button,
+  body.print-mode .el-pagination,
+  body.print-mode .notify-badge,
+  body.print-mode .theme-btn {
+    display: none !important;
+  }
+  body.print-mode .el-main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  body.print-mode .glass-card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  body.print-mode .el-table {
+    page-break-inside: auto;
+  }
+  body.print-mode .el-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  body.print-mode thead {
+    display: table-header-group;
+  }
+  body.print-mode .el-table,
+  body.print-mode .el-table th,
+  body.print-mode .el-table td {
+    border-color: #333 !important;
+    color: #000 !important;
+  }
+  body.print-mode .kpi-num,
+  body.print-mode .kpi-value,
+  body.print-mode .page-title {
+    color: #000 !important;
+  }
+  body.print-mode .fade-up {
+    animation: none !important;
+  }
+}

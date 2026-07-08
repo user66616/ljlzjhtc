@@ -49,6 +49,24 @@ const routes = [
         name: 'employee-profile',
         component: () => import('../views/EmployeeProfile.vue'),
         meta: { roles: ['admin', 'manager', 'employee'], title: '员工主页' }
+      },
+      {
+        path: 'appeals',
+        name: 'appeals',
+        component: () => import('../views/Appeals.vue'),
+        meta: { roles: ['admin', 'manager', 'employee'], title: '考勤申诉' }
+      },
+      {
+        path: 'ai-insight',
+        name: 'ai-insight',
+        component: () => import('../views/AIInsight.vue'),
+        meta: { roles: ['admin', 'manager', 'employee'], title: '智能解读' }
+      },
+      {
+        path: 'operation-logs',
+        name: 'operation-logs',
+        component: () => import('../views/OperationLogs.vue'),
+        meta: { roles: ['admin'], title: '操作日志' }
       }
     ]
   },

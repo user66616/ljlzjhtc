@@ -23,6 +23,62 @@
       </div>
     </div>
 
+    <!-- P2-06 同环比指标 -->
+    <div class="glass-card mom-card fade-up" v-if="auth.role !== 'employee'">
+      <div class="card-title">
+        <el-icon><DataLine /></el-icon><span>同环比指标（本月 vs 上月）</span>
+      </div>
+      <div class="mom-grid">
+        <div class="mom-item">
+          <div class="mom-label">出勤率</div>
+          <div class="mom-value">{{ momData.attendanceRate.thisMonth }}%</div>
+          <div class="mom-change" :class="momData.attendanceRate.delta >= 0 ? 'up' : 'down'">
+            <el-icon><Top v-if="momData.attendanceRate.delta >= 0" /><Bottom v-else /></el-icon>
+            {{ Math.abs(momData.attendanceRate.delta).toFixed(1) }}% 环比{{ momData.attendanceRate.delta >= 0 ? '上升' : '下降' }}
+          </div>
+        </div>
+        <div class="mom-item">
+          <div class="mom-label">迟到次数</div>
+          <div class="mom-value">{{ momData.lateCount.thisMonth }} 次</div>
+          <div class="mom-change" :class="momData.lateCount.delta <= 0 ? 'up' : 'down'">
+            <el-icon><Top v-if="momData.lateCount.delta > 0" /><Bottom v-else /></el-icon>
+            {{ Math.abs(momData.lateCount.delta) }} 次 环比{{ momData.lateCount.delta <= 0 ? '减少' : '增加' }}
+          </div>
+        </div>
+        <div class="mom-item">
+          <div class="mom-label">加班总时长</div>
+          <div class="mom-value">{{ momData.overtimeHours.thisMonth }} 小时</div>
+          <div class="mom-change" :class="momData.overtimeHours.delta >= 0 ? 'up' : 'down'">
+            <el-icon><Top v-if="momData.overtimeHours.delta >= 0" /><Bottom v-else /></el-icon>
+            {{ Math.abs(momData.overtimeHours.delta).toFixed(1) }} 小时 环比{{ momData.overtimeHours.delta >= 0 ? '上升' : '下降' }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- P2-08 连续异常预警 -->
+    <div class="glass-card alert-card fade-up" v-if="alertEmployees.length > 0 && auth.role !== 'employee'">
+      <div class="card-title">
+        <el-icon><WarningFilled /></el-icon><span>连续异常预警名单（P2-08）</span>
+        <el-tag type="danger" effect="dark" size="small">{{ alertEmployees.length }} 人预警</el-tag>
+        <span class="card-sub">连续迟到 ≥ 3 天的员工自动标记为预警</span>
+      </div>
+      <el-table :data="alertEmployees" border size="small">
+        <el-table-column prop="employeeId" label="工号" width="90" />
+        <el-table-column prop="name" label="姓名" width="100" />
+        <el-table-column prop="dept" label="部门" width="120" />
+        <el-table-column prop="consecutiveLate" label="连续迟到天数" width="140" align="center">
+          <template #default="{ row }">
+            <el-tag type="danger" effect="dark" size="small">{{ row.consecutiveLate }} 天</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="totalLate" label="本月迟到总次数" width="140" align="center" />
+        <el-table-column label="最近迟到日期" min-width="120">
+          <template #default="{ row }">{{ row.lastLateDate }}</template>
+        </el-table-column>
+      </el-table>
+    </div>
+
     <!-- 图表区 -->
     <div class="chart-grid fade-up">
       <div class="glass-card chart-card chart-trend">
@@ -141,7 +197,7 @@ import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
   TrendCharts, Histogram, Trophy, Warning, DataLine, AlarmClock, Clock, Timer,
-  PieChart, DataAnalysis
+  PieChart, DataAnalysis, WarningFilled, Top, Bottom
 } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
@@ -334,6 +390,90 @@ const topBest = computed(() => ranking.value.top5)
 
 // 后5 待改进（异常分最高）
 const bottomWorst = computed(() => ranking.value.bottom5)
+
+// P2-06 同环比指标
+const momData = computed(() => {
+  const now = new Date()
+  const thisMonth = now.getMonth() + 1
+  const thisYear = now.getFullYear()
+  const lastMonthDate = new Date(thisYear, now.getMonth() - 1, 1)
+  const lastMonth = lastMonthDate.getMonth() + 1
+  const lastMonthYear = lastMonthDate.getFullYear()
+
+  const thisMonthRecords = computedRecords.value.filter((r) => {
+    const [y, m] = r.date.split('-').map(Number)
+    return y === thisYear && m === thisMonth
+  })
+  const lastMonthRecords = computedRecords.value.filter((r) => {
+    const [y, m] = r.date.split('-').map(Number)
+    return y === lastMonthYear && m === lastMonth
+  })
+
+  const thisSummary = summarize(thisMonthRecords)
+  const lastSummary = summarize(lastMonthRecords)
+
+  return {
+    attendanceRate: {
+      thisMonth: thisSummary.attendanceRate,
+      delta: thisSummary.attendanceRate - lastSummary.attendanceRate
+    },
+    lateCount: {
+      thisMonth: thisSummary.lateCount,
+      delta: thisSummary.lateCount - lastSummary.lateCount
+    },
+    overtimeHours: {
+      thisMonth: thisSummary.overtimeHours,
+      delta: thisSummary.overtimeHours - lastSummary.overtimeHours
+    }
+  }
+})
+
+// P2-08 连续异常预警
+const alertEmployees = computed(() => {
+  const now = new Date()
+  const thisYear = now.getFullYear()
+  const thisMonth = now.getMonth() + 1
+  const monthPrefix = `${thisYear}-${String(thisMonth).padStart(2, '0')}`
+
+  const empRecords = {}
+  scoped.value.forEach((r) => {
+    if (!r.date.startsWith(monthPrefix)) return
+    if (!empRecords[r.employeeId]) empRecords[r.employeeId] = []
+    if (r.isLate) empRecords[r.employeeId].push(r.date)
+  })
+
+  const result = []
+  Object.keys(empRecords).forEach((empId) => {
+    const lateDates = empRecords[empId].sort()
+    if (lateDates.length < 3) return
+    // 找最长的连续迟到天数
+    let maxConsecutive = 1
+    let currentConsecutive = 1
+    for (let i = 1; i < lateDates.length; i++) {
+      const prev = new Date(lateDates[i - 1])
+      const curr = new Date(lateDates[i])
+      const diffDays = (curr - prev) / (1000 * 60 * 60 * 24)
+      if (diffDays === 1) {
+        currentConsecutive++
+        maxConsecutive = Math.max(maxConsecutive, currentConsecutive)
+      } else {
+        currentConsecutive = 1
+      }
+    }
+    if (maxConsecutive >= 3) {
+      const emp = empMap.value[empId] || {}
+      result.push({
+        employeeId: empId,
+        name: emp.name || '未知',
+        dept: emp.dept || '未知',
+        consecutiveLate: maxConsecutive,
+        totalLate: lateDates.length,
+        lastLateDate: lateDates[lateDates.length - 1]
+      })
+    }
+  })
+  return result.sort((a, b) => b.consecutiveLate - a.consecutiveLate)
+})
 
 const router = useRouter()
 function goProfile(row) {
@@ -645,5 +785,53 @@ onBeforeUnmount(() => {
 }
 .clickable-table :deep(.el-table__row:hover > td) {
   background: var(--el-color-primary-light-9, #ecf5ff) !important;
+}
+
+/* P2-06 同环比 */
+.mom-card {
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.mom-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .mom-grid { grid-template-columns: 1fr; }
+}
+.mom-item {
+  text-align: center;
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--bg);
+}
+.mom-label {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.mom-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.mom-change {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mom-change.up { color: #16a34a; }
+.mom-change.down { color: #dc2626; }
+
+/* P2-08 预警 */
+.alert-card {
+  padding: 20px;
+  margin-bottom: 20px;
+  border-left: 4px solid #ef4444;
 }
 </style>

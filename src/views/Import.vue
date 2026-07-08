@@ -133,6 +133,31 @@
       </div>
     </div>
 
+    <!-- P2-02 数据备份与回滚 -->
+    <div class="glass-card fade-up step-card" v-if="auth.role === 'admin'">
+      <div class="card-title">
+        <el-icon><FolderOpened /></el-icon>
+        <span>数据备份与回滚（P2-02）</span>
+        <span class="step-summary">
+          <el-tag type="info">共 {{ backups.length }} 个备份</el-tag>
+        </span>
+      </div>
+      <div class="clear-tip" style="margin-bottom: 12px">导入新数据前系统自动备份上一版全量数据，如导入出错可一键回滚恢复。</div>
+      <el-table :data="backups" border size="small" max-height="280" v-loading="backupLoading">
+        <el-table-column prop="backupName" label="备份名称" min-width="180" />
+        <el-table-column prop="recordCount" label="记录数" width="90" align="center" />
+        <el-table-column prop="operator" label="操作人" width="100" />
+        <el-table-column label="备份时间" width="170">
+          <template #default="{ row }">{{ (row.createdAt || '').slice(0, 19) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" align="center">
+          <template #default="{ row }">
+            <el-button type="warning" link size="small" @click="rollbackBackup(row.id)">回滚</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
     <!-- P1-05 清空数据 -->
     <div class="glass-card fade-up step-card" v-if="auth.role === 'admin'">
       <div class="card-title">
@@ -165,7 +190,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   UploadFilled, Document, Download, DocumentChecked, Check,
-  RefreshLeft, CircleCheckFilled, Delete, Connection
+  RefreshLeft, CircleCheckFilled, Delete, Connection, FolderOpened
 } from '@element-plus/icons-vue'
 import * as XLSX from 'xlsx'
 import request from '../api/request'
@@ -356,17 +381,26 @@ async function onImport() {
       checkOut: r.checkOut ? String(r.checkOut).trim() : null,
       overtimeMinutes: 0
     }))
+    // P2-02 导入前自动备份
+    try {
+      await request.post('/dataBackups/backup', { operator: auth.name || 'admin' })
+    } catch (e) { /* 备份失败不阻塞导入 */ }
     // 逐条写入（json-server 自动分配 id）
     await Promise.all(
       payload.map((rec) => request.post('/attendanceRecords', rec))
     )
+    // 记录操作日志
+    try {
+      await request.post('/operationLogs', { operator: auth.name || 'admin', action: '导入数据', detail: `导入 ${payload.length} 条记录` })
+    } catch (e) { /* 忽略 */ }
+    await loadBackups()
     result.value = {
       success: payload.length,
       fail: errorRows.value.length,
       dedup: dedupCount.value
     }
     parsed.value = null
-    ElMessage.success(`导入成功，共写入 ${payload.length} 条记录`)
+    ElMessage.success(`导入成功，共写入 ${payload.length} 条记录（已自动备份上一版数据）`)
   } catch (e) {
     // 错误已由拦截器提示
   } finally {
@@ -438,6 +472,31 @@ async function onClear() {
     clearing.value = false
   }
 }
+
+// P2-02 数据备份与回滚
+const backups = ref([])
+const backupLoading = ref(false)
+
+async function loadBackups() {
+  backupLoading.value = true
+  try {
+    const { data } = await request.get('/dataBackups')
+    backups.value = data
+  } finally { backupLoading.value = false }
+}
+
+async function rollbackBackup(id) {
+  try {
+    await ElMessageBox.confirm('确认回滚到此备份数据？当前考勤记录将被替换。', '提示', { type: 'warning' })
+    await request.post(`/dataBackups/${id}/rollback`)
+    await request.post('/operationLogs', { operator: auth.name || 'admin', action: '回滚数据', detail: `回滚到备份#${id}` })
+    ElMessage.success('已回滚，数据已恢复')
+    await loadBackups()
+  } catch (e) { /* 取消 */ }
+}
+
+// 初始化加载备份列表
+loadBackups()
 </script>
 
 <style scoped>

@@ -49,11 +49,46 @@
           <el-button :icon="RefreshLeft" @click="onReset">重置</el-button>
           <el-button type="success" plain :icon="Download" @click="onExport">导出 CSV</el-button>
         </el-form-item>
+        <el-form-item>
+          <el-radio-group v-model="viewMode" size="small">
+            <el-radio-button label="table">表格视图</el-radio-button>
+            <el-radio-button label="calendar">日历视图</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
       </el-form>
     </div>
 
+    <!-- P2-03 日历视图 -->
+    <div v-if="viewMode === 'calendar'" class="glass-card calendar-card fade-up" v-loading="loading">
+      <div class="calendar-toolbar">
+        <el-button :icon="ArrowLeft" size="small" @click="calMonth--">上月</el-button>
+        <span class="cal-title">{{ calYear }}年{{ calMonth }}月</span>
+        <el-button size="small" @click="calMonth++">下月<el-icon class="el-icon--right"><ArrowRight /></el-icon></el-button>
+        <el-select v-if="auth.role !== 'employee'" v-model="calEmployeeId" placeholder="选择员工" filterable style="width: 200px; margin-left: 16px">
+          <el-option v-for="e in calendarEmployees" :key="e.employeeId" :label="`${e.name} (${e.employeeId})`" :value="e.employeeId" />
+        </el-select>
+        <div class="cal-legend">
+          <span v-for="(meta, key) in STATUS_META" :key="key" class="legend-item">
+            <i class="legend-dot" :style="{ background: meta.color }"></i>{{ meta.label }}
+          </span>
+        </div>
+      </div>
+      <div class="calendar-grid">
+        <div class="cal-weekday" v-for="w in weekdays" :key="w">{{ w }}</div>
+        <div v-for="(day, idx) in calendarDays" :key="idx" class="cal-day" :class="{ 'cal-empty': !day, 'cal-weekend': day && (idx % 7 === 0 || idx % 7 === 6) }">
+          <template v-if="day">
+            <div class="cal-day-num">{{ day.day }}</div>
+            <div v-if="day.record" class="cal-day-status" :style="{ background: STATUS_META[day.record.status]?.color + '22', color: STATUS_META[day.record.status]?.color, borderColor: STATUS_META[day.record.status]?.color }">
+              <el-tag :type="STATUS_META[day.record.status]?.type" size="small" effect="light">{{ STATUS_META[day.record.status]?.label }}</el-tag>
+              <div class="cal-day-time" v-if="day.record.checkIn">{{ day.record.checkIn }} - {{ day.record.checkOut || '?' }}</div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
     <!-- 列表 -->
-    <div class="glass-card table-card fade-up" v-loading="loading">
+    <div v-if="viewMode === 'table'" class="glass-card table-card fade-up" v-loading="loading">
       <!-- 空状态 F-09-02 -->
       <el-empty v-if="!loading && filtered.length === 0" description="暂无符合条件的考勤记录">
         <el-button type="primary" @click="goImport" v-if="auth.role === 'admin'">去导入数据</el-button>
@@ -174,16 +209,37 @@
             <el-button @click="detail.editing = false">取消</el-button>
           </template>
         </div>
+
+        <!-- P2-10 申诉功能（员工） -->
+        <div class="detail-actions" v-if="auth.role === 'employee' && detail.row && (detail.row.isLate || detail.row.isEarly || detail.row.status === 'absent' || detail.row.status === 'missing')">
+          <el-button type="warning" plain @click="appealDialog.visible = true">发起申诉</el-button>
+        </div>
       </template>
     </el-drawer>
+
+    <!-- P2-10 申诉对话框 -->
+    <el-dialog v-model="appealDialog.visible" title="考勤申诉" width="480px">
+      <el-form :model="appealForm" label-width="80px">
+        <el-form-item label="申诉记录">
+          <span>{{ detail.row?.date }} {{ STATUS_META[detail.row?.status]?.label }}</span>
+        </el-form-item>
+        <el-form-item label="申诉原因">
+          <el-input v-model="appealForm.reason" type="textarea" :rows="4" placeholder="请详细说明申诉原因" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="appealDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="appealDialog.saving" @click="submitAppeal">提交申诉</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Search, RefreshLeft, Download } from '@element-plus/icons-vue'
+import { Search, RefreshLeft, Download, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
 import { useRulesStore } from '../stores/rules'
@@ -197,6 +253,44 @@ const rulesStore = useRulesStore()
 const loading = ref(false)
 const employees = ref([])
 const records = ref([])
+const viewMode = ref('table')
+
+// P2-03 日历视图
+const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+const today = new Date()
+const calYear = ref(today.getFullYear())
+const calMonth = ref(today.getMonth() + 1)
+const calEmployeeId = ref(auth.role === 'employee' ? auth.employeeId : '')
+
+// 修正月份边界
+watch(calMonth, (v) => {
+  if (v < 1) { calMonth.value = 12; calYear.value-- }
+  if (v > 12) { calMonth.value = 1; calYear.value++ }
+})
+
+const calendarEmployees = computed(() => {
+  if (auth.role === 'employee') return employees.value.filter((e) => e.employeeId === auth.employeeId)
+  if (auth.role === 'manager') return employees.value.filter((e) => e.dept === auth.dept)
+  return employees.value
+})
+
+const calendarDays = computed(() => {
+  const year = calYear.value
+  const month = calMonth.value
+  const firstDay = new Date(year, month - 1, 1).getDay()
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const empId = calEmployeeId.value
+  const empRecords = empId ? computedRecords.value.filter((r) => r.employeeId === empId) : []
+  const recordMap = {}
+  empRecords.forEach((r) => { recordMap[r.date] = r })
+  const days = []
+  for (let i = 0; i < firstDay; i++) days.push(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    days.push({ day: d, record: recordMap[dateStr] || null })
+  }
+  return days
+})
 
 const filters = reactive({
   dateRange: null,
@@ -400,6 +494,32 @@ async function saveEdit() {
     detail.saving = false
   }
 }
+
+// P2-10 申诉
+const appealDialog = reactive({ visible: false, saving: false })
+const appealForm = reactive({ reason: '' })
+
+async function submitAppeal() {
+  if (!appealForm.reason || appealForm.reason.trim() === '') {
+    ElMessage.warning('请填写申诉原因')
+    return
+  }
+  appealDialog.saving = true
+  try {
+    await request.post('/appeals', {
+      recordId: detail.row.id,
+      employeeId: auth.employeeId,
+      reason: appealForm.reason
+    })
+    ElMessage.success('申诉已提交，请等待管理员审核')
+    appealDialog.visible = false
+    appealForm.reason = ''
+  } catch (e) {
+    // 错误已由拦截器提示
+  } finally {
+    appealDialog.saving = false
+  }
+}
 </script>
 
 <style scoped>
@@ -486,5 +606,94 @@ async function saveEdit() {
   display: flex;
   gap: 10px;
   margin-top: 16px;
+}
+
+/* P2-03 日历视图 */
+.calendar-card {
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.cal-title {
+  font-size: 16px;
+  font-weight: 700;
+  min-width: 120px;
+  text-align: center;
+}
+.cal-legend {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-weekday {
+  text-align: center;
+  font-weight: 600;
+  padding: 8px 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.cal-day {
+  min-height: 90px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: background 0.2s;
+}
+.cal-day:hover {
+  background: var(--bg);
+}
+.cal-day.cal-empty {
+  border: none;
+  background: transparent;
+}
+.cal-day.cal-weekend {
+  background: var(--bg);
+}
+.cal-day-num {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.cal-day-status {
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+.cal-day-time {
+  font-size: 10px;
+  opacity: 0.8;
 }
 </style>

@@ -46,6 +46,15 @@ export const useAuthStore = defineStore('auth', {
     logout() {
       this.user = null
       localStorage.removeItem('attendance_user')
+    },
+    async changePassword(oldPassword, newPassword) {
+      if (!this.user || !this.user.id) throw new Error('用户未登录')
+      const { data } = await request.put('/users/password', {
+        userId: this.user.id,
+        oldPassword,
+        newPassword
+      })
+      return data
     }
   }
 })

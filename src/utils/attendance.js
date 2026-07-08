@@ -29,6 +29,7 @@ export const STATUS_META = {
   early: { label: '早退', type: 'warning', color: '#faad14' },
   missing: { label: '缺卡', type: 'danger', color: '#ff4d4f' },
   absent: { label: '缺勤', type: 'info', color: '#8c8c8c' },
+  leave: { label: '请假', type: 'primary', color: '#2563eb' },
   overtime: { label: '加班', type: 'primary', color: '#1677ff' }
 }
 
@@ -70,6 +71,15 @@ export function calcRecord(rec, rules) {
       isOvertime = true
       overtimeMinutes = outMin - overtimeAfter
     }
+    // P2-05 午休时长扣除：加班时长扣除午休重叠部分
+    if (isOvertime && rules.lunchStart && rules.lunchEnd) {
+      const lunchStart = toMinutes(rules.lunchStart)
+      const lunchEnd = toMinutes(rules.lunchEnd)
+      if (overtimeAfter < lunchEnd) {
+        // 加班起算在午休结束前，需要扣除午休重叠部分
+        overtimeMinutes = Math.max(0, overtimeMinutes - (lunchEnd - Math.max(overtimeAfter, lunchStart)))
+      }
+    }
     // 主状态优先级：迟到 > 早退 > 加班 > 正常
     if (isLate) status = 'late'
     else if (isEarly) status = 'early'
@@ -89,10 +99,20 @@ export function calcRecord(rec, rules) {
   }
 }
 
-// 批量计算
-export function calcAll(records, rules) {
+// 批量计算（支持传入请假记录，请假期间标记为 leave 状态）
+export function calcAll(records, rules, leaves) {
   if (!rules) return records.map((r) => ({ ...r, status: 'normal' }))
-  return records.map((r) => calcRecord(r, rules))
+  return records.map((r) => {
+    if (leaves && leaves.length > 0) {
+      const onLeave = leaves.some(
+        (l) => l.employeeId === r.employeeId && r.date >= l.startDate && r.date <= l.endDate
+      )
+      if (onLeave) {
+        return { ...r, status: 'leave', isLate: false, isEarly: false, isOvertime: false, lateMinutes: 0, earlyMinutes: 0, overtimeMinutes: 0 }
+      }
+    }
+    return calcRecord(r, rules)
+  })
 }
 
 // KPI 汇总
