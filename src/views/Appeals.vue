@@ -3,103 +3,192 @@
     <div class="page-header">
       <h2 class="page-title">{{ pageTitle }}</h2>
       <p class="page-desc">{{ pageDesc }}</p>
-      <el-button
-        v-if="auth.role === 'employee'"
-        type="primary"
-        :icon="Plus"
-        style="margin-top: 12px"
-        @click="submitDialog.visible = true; prepareSubmitForm()"
-      >发起申诉</el-button>
     </div>
 
-    <!-- 统计卡片 -->
-    <div class="stat-row fade-up" v-if="auth.role !== 'employee'">
-      <div class="stat-card pending">
-        <div class="stat-num">{{ stats.pending }}</div>
-        <div class="stat-label">待审核</div>
-      </div>
-      <div class="stat-card approved">
-        <div class="stat-num">{{ stats.approved }}</div>
-        <div class="stat-label">已通过</div>
-      </div>
-      <div class="stat-card rejected">
-        <div class="stat-num">{{ stats.rejected }}</div>
-        <div class="stat-label">已驳回</div>
-      </div>
-    </div>
-
-    <div class="glass-card filter-bar fade-up">
-      <el-radio-group v-model="statusFilter" size="default" @change="loadAppeals">
-        <el-radio-button label="">全部</el-radio-button>
-        <el-radio-button label="pending">待处理</el-radio-button>
-        <el-radio-button label="approved">已通过</el-radio-button>
-        <el-radio-button label="rejected">已驳回</el-radio-button>
-      </el-radio-group>
-    </div>
-
-    <div class="glass-card fade-up">
-      <el-empty v-if="filteredAppeals.length === 0" :description="emptyDesc" />
-      <template v-else>
-        <el-table :data="filteredAppeals" border size="default" max-height="600">
+    <!-- 员工端：我的异常记录（可直接申诉） -->
+    <template v-if="auth.role === 'employee'">
+      <div class="glass-card fade-up">
+        <div class="section-title">
+          <el-icon><WarningFilled /></el-icon>
+          <span>我的异常记录</span>
+          <el-tag type="danger" size="small" effect="light" style="margin-left: 8px">{{ myExceptionRecords.length }} 条</el-tag>
+        </div>
+        <el-empty v-if="myExceptionRecords.length === 0" description="暂无异常考勤，继续保持！" />
+        <el-table v-else :data="myExceptionRecords" border size="default" max-height="420">
           <el-table-column type="index" label="#" width="55" align="center" />
-          <el-table-column prop="employeeId" label="工号" width="90" v-if="auth.role !== 'employee'" />
-          <el-table-column label="员工姓名" width="110" v-if="auth.role !== 'employee'">
-            <template #default="{ row }">{{ empMap[row.employeeId]?.name || row.employeeId }}</template>
-          </el-table-column>
-          <el-table-column label="申诉记录" width="200">
+          <el-table-column prop="date" label="日期" width="120" />
+          <el-table-column label="异常类型" width="100" align="center">
             <template #default="{ row }">
-              <div>{{ row.recordDate || '—' }}</div>
-              <el-tag size="small" :type="STATUS_META[row.recordStatus]?.type" effect="light">
-                {{ STATUS_META[row.recordStatus]?.label || row.recordStatus || '异常' }}
+              <el-tag :type="STATUS_META[row.status]?.type" effect="dark" size="small">
+                {{ STATUS_META[row.status]?.label }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="reason" label="申诉原因" min-width="220" show-overflow-tooltip />
+          <el-table-column label="打卡情况" min-width="200">
+            <template #default="{ row }">
+              <span v-if="!row.checkIn && !row.checkOut" style="color:#ff4d4f">无打卡记录</span>
+              <span v-else>
+                上班：<span :class="{ miss: !row.checkIn }">{{ row.checkIn || '缺卡' }}</span>
+                ｜ 下班：<span :class="{ miss: !row.checkOut }">{{ row.checkOut || '缺卡' }}</span>
+              </span>
+              <span v-if="row.lateMinutes" style="color:#faad14; margin-left:6px">迟到{{ row.lateMinutes }}分</span>
+              <span v-if="row.earlyMinutes" style="color:#faad14; margin-left:6px">早退{{ row.earlyMinutes }}分</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="申诉状态" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.appealStatus === 'pending'" type="warning" effect="dark" size="small">待审核</el-tag>
+              <el-tag v-else-if="row.appealStatus === 'approved'" type="success" effect="dark" size="small">已通过</el-tag>
+              <el-tag v-else-if="row.appealStatus === 'rejected'" type="danger" effect="dark" size="small">已驳回</el-tag>
+              <span v-else style="color:#c0c4cc">未申诉</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" align="center">
+            <template #default="{ row }">
+              <el-button
+                v-if="!row.appealStatus || row.appealStatus === 'rejected'"
+                type="primary"
+                link
+                size="small"
+                @click="openAppealDialog(row)"
+              >{{ row.appealStatus === 'rejected' ? '重新申诉' : '申诉' }}</el-button>
+              <span v-else-if="row.appealStatus === 'pending'" style="color:#909399; font-size:12px">审核中</span>
+              <span v-else style="color:#909399; font-size:12px">已处理</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <!-- 员工端：我的申诉历史 -->
+      <div class="glass-card fade-up" style="margin-top: 20px">
+        <div class="section-title">
+          <el-icon><Document /></el-icon>
+          <span>我的申诉记录</span>
+        </div>
+        <el-radio-group v-model="statusFilter" size="small" style="margin-bottom: 12px">
+          <el-radio-button label="">全部</el-radio-button>
+          <el-radio-button label="pending">待审核</el-radio-button>
+          <el-radio-button label="approved">已通过</el-radio-button>
+          <el-radio-button label="rejected">已驳回</el-radio-button>
+        </el-radio-group>
+        <el-empty v-if="filteredAppeals.length === 0" description="暂无申诉记录" />
+        <el-table v-else :data="filteredAppeals" border size="small">
+          <el-table-column type="index" label="#" width="55" align="center" />
+          <el-table-column label="申诉日期" width="120">
+            <template #default="{ row }">{{ (row.recordDate || '').slice(0, 10) }}</template>
+          </el-table-column>
+          <el-table-column label="异常类型" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" :type="STATUS_META[row.recordStatus]?.type" effect="light">
+                {{ STATUS_META[row.recordStatus]?.label || '异常' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="reason" label="申诉原因" min-width="200" show-overflow-tooltip />
           <el-table-column label="状态" width="100" align="center">
             <template #default="{ row }">
               <el-tag :type="statusMeta[row.status]?.type" size="small" effect="dark">{{ statusMeta[row.status]?.label }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="审核意见" min-width="180" show-overflow-tooltip v-if="auth.role !== 'employee' || statusFilter !== 'pending'">
+          <el-table-column label="审核意见" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">
-              <template v-if="row.status === 'pending'">
-                <span style="color: #c0c4cc">待审核</span>
-              </template>
+              <template v-if="row.status === 'pending'"><span style="color:#c0c4cc">待审核</span></template>
               <template v-else>
                 <div>{{ row.reviewNote || '（无意见）' }}</div>
-                <div style="font-size: 12px; color: #909399; margin-top: 4px">审核人：{{ row.reviewer }}</div>
+                <div style="font-size:12px;color:#909399;margin-top:4px">审核人：{{ row.reviewer }}</div>
               </template>
             </template>
           </el-table-column>
           <el-table-column label="提交时间" width="165">
             <template #default="{ row }">{{ (row.createdAt || '').slice(0, 19) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="160" align="center" v-if="auth.role === 'admin' || auth.role === 'manager'">
-            <template #default="{ row }">
-              <template v-if="row.status === 'pending'">
-                <el-button type="success" link size="small" @click="review(row, 'approved')">通过</el-button>
-                <el-button type="danger" link size="small" @click="review(row, 'rejected')">驳回</el-button>
-              </template>
-              <span v-else style="color: var(--text-2); font-size: 12px">已处理</span>
-            </template>
-          </el-table-column>
         </el-table>
-      </template>
-    </div>
+      </div>
+    </template>
 
-    <!-- 发起申诉对话框（员工端） -->
-    <el-dialog v-model="submitDialog.visible" title="发起考勤申诉" width="520px">
+    <!-- 管理端：统计卡片 + 申诉列表 -->
+    <template v-else>
+      <div class="stat-row fade-up">
+        <div class="stat-card pending">
+          <div class="stat-num">{{ stats.pending }}</div>
+          <div class="stat-label">待审核</div>
+        </div>
+        <div class="stat-card approved">
+          <div class="stat-num">{{ stats.approved }}</div>
+          <div class="stat-label">已通过</div>
+        </div>
+        <div class="stat-card rejected">
+          <div class="stat-num">{{ stats.rejected }}</div>
+          <div class="stat-label">已驳回</div>
+        </div>
+      </div>
+
+      <div class="glass-card filter-bar fade-up">
+        <el-radio-group v-model="statusFilter" size="default" @change="loadAppeals">
+          <el-radio-button label="">全部</el-radio-button>
+          <el-radio-button label="pending">待处理</el-radio-button>
+          <el-radio-button label="approved">已通过</el-radio-button>
+          <el-radio-button label="rejected">已驳回</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <div class="glass-card fade-up">
+        <el-empty v-if="filteredAppeals.length === 0" description="暂无申诉记录" />
+        <template v-else>
+          <el-table :data="filteredAppeals" border size="default" max-height="600">
+            <el-table-column type="index" label="#" width="55" align="center" />
+            <el-table-column prop="employeeId" label="工号" width="90" />
+            <el-table-column label="员工姓名" width="110">
+              <template #default="{ row }">{{ empMap[row.employeeId]?.name || row.employeeId }}</template>
+            </el-table-column>
+            <el-table-column label="申诉记录" width="180">
+              <template #default="{ row }">
+                <div>{{ (row.recordDate || '').slice(0, 10) }}</div>
+                <el-tag size="small" :type="STATUS_META[row.recordStatus]?.type" effect="light">
+                  {{ STATUS_META[row.recordStatus]?.label || row.recordStatus || '异常' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="reason" label="申诉原因" min-width="220" show-overflow-tooltip />
+            <el-table-column label="状态" width="100" align="center">
+              <template #default="{ row }">
+                <el-tag :type="statusMeta[row.status]?.type" size="small" effect="dark">{{ statusMeta[row.status]?.label }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="审核意见" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">
+                <template v-if="row.status === 'pending'"><span style="color:#c0c4cc">待审核</span></template>
+                <template v-else>
+                  <div>{{ row.reviewNote || '（无意见）' }}</div>
+                  <div style="font-size:12px;color:#909399;margin-top:4px">审核人：{{ row.reviewer }}</div>
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column label="提交时间" width="165">
+              <template #default="{ row }">{{ (row.createdAt || '').slice(0, 19) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="160" align="center">
+              <template #default="{ row }">
+                <template v-if="row.status === 'pending'">
+                  <el-button type="success" link size="small" @click="review(row, 'approved')">通过</el-button>
+                  <el-button type="danger" link size="small" @click="review(row, 'rejected')">驳回</el-button>
+                </template>
+                <span v-else style="color:var(--text-2);font-size:12px">已处理</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
+      </div>
+    </template>
+
+    <!-- 申诉填写对话框 -->
+    <el-dialog v-model="submitDialog.visible" title="发起考勤申诉" width="500px">
       <el-form :model="submitForm" label-width="90px">
         <el-form-item label="申诉日期">
-          <el-select v-model="submitForm.recordId" placeholder="请选择要申诉的异常记录" style="width: 100%" filterable>
-            <el-option
-              v-for="rec in myExceptionRecords"
-              :key="rec.id"
-              :label="`${rec.date} ${STATUS_META[rec.status]?.label || rec.status}（已有${rec.appealed ? '申诉' : '无'}）`"
-              :value="rec.id"
-              :disabled="rec.appealed"
-            />
-          </el-select>
+          <el-tag size="large">{{ submitForm.recordDate }}</el-tag>
+          <el-tag size="large" :type="STATUS_META[submitForm.recordStatus]?.type" effect="dark" style="margin-left:8px">
+            {{ STATUS_META[submitForm.recordStatus]?.label }}
+          </el-tag>
         </el-form-item>
         <el-form-item label="申诉原因">
           <el-input
@@ -136,7 +225,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { WarningFilled, Document } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
 import { useRulesStore } from '../stores/rules'
@@ -148,7 +237,6 @@ const loading = ref(false)
 const appeals = ref([])
 const employees = ref([])
 const myRecords = ref([])
-const myAppeals = ref([])
 const statusFilter = ref('')
 
 const pageTitle = computed(() => {
@@ -156,13 +244,8 @@ const pageTitle = computed(() => {
   return '考勤申诉管理'
 })
 const pageDesc = computed(() => {
-  if (auth.role === 'employee') return '对异常考勤记录发起申诉，等待审核'
+  if (auth.role === 'employee') return '对异常考勤记录直接发起申诉，查看审核进度与结果'
   return '员工申诉记录审核与处理'
-})
-
-const emptyDesc = computed(() => {
-  if (auth.role === 'employee') return '暂无申诉记录，遇到异常考勤可点击「发起申诉」'
-  return '暂无申诉记录'
 })
 
 const statusMeta = {
@@ -196,13 +279,22 @@ const filteredAppeals = computed(() => {
   return scopedAppeals.value.filter((a) => a.status === statusFilter.value)
 })
 
+const appealRecordMap = computed(() => {
+  const m = {}
+  appeals.value.forEach((a) => {
+    if (a.recordId && (a.status === 'pending' || !m[a.recordId])) {
+      m[a.recordId] = a.status
+    }
+  })
+  return m
+})
+
 const myExceptionRecords = computed(() => {
-  const appealedIds = new Set(myAppeals.value.filter((a) => a.status === 'pending').map((a) => a.recordId))
   const rules = rulesStore.rules
   const calc = calcAll(myRecords.value, rules)
   return calc
     .filter((r) => ['late', 'early', 'missing', 'absent'].includes(r.status))
-    .map((r) => ({ ...r, appealed: appealedIds.has(r.id) }))
+    .map((r) => ({ ...r, appealStatus: appealRecordMap.value[r.id] || null }))
     .sort((a, b) => b.date.localeCompare(a.date))
 })
 
@@ -213,7 +305,6 @@ async function loadAppeals() {
     if (auth.role === 'employee') params.employeeId = auth.employeeId
     const { data } = await request.get('/appeals', { params })
     appeals.value = data
-    myAppeals.value = data
   } finally {
     loading.value = false
   }
@@ -228,38 +319,29 @@ async function loadMyRecords() {
 }
 
 const submitDialog = reactive({ visible: false, saving: false })
-const submitForm = reactive({ recordId: null, reason: '' })
+const submitForm = reactive({ recordId: null, recordDate: '', recordStatus: '', reason: '' })
 
-function prepareSubmitForm() {
-  submitForm.recordId = null
+function openAppealDialog(row) {
+  submitForm.recordId = row.id
+  submitForm.recordDate = row.date
+  submitForm.recordStatus = row.status
   submitForm.reason = ''
-  loadMyRecords().then(() => {
-    nextTick(() => {
-      const presetId = sessionStorage.getItem('appeal_record_id')
-      if (presetId) {
-        const exists = myExceptionRecords.value.find((r) => r.id === Number(presetId) || r.id === presetId)
-        if (exists && !exists.appealed) {
-          submitForm.recordId = exists.id
-        }
-        sessionStorage.removeItem('appeal_record_id')
-      }
-    })
-  })
+  submitDialog.visible = true
 }
 
 async function submitAppeal() {
-  if (!submitForm.recordId) return ElMessage.warning('请选择要申诉的记录')
   if (!submitForm.reason.trim()) return ElMessage.warning('请填写申诉原因')
   submitDialog.saving = true
   try {
     await request.post('/appeals', {
       recordId: submitForm.recordId,
       employeeId: auth.employeeId,
-      reason: submitForm.reason.trim()
+      reason: submitForm.reason.trim(),
+      recordStatus: submitForm.recordStatus
     })
     ElMessage.success('申诉已提交，请等待审核')
     submitDialog.visible = false
-    await loadAppeals()
+    await Promise.all([loadAppeals(), loadMyRecords()])
   } catch (e) {
     // 拦截器提示
   } finally {
@@ -303,12 +385,9 @@ onMounted(async () => {
     await loadMyRecords()
     const presetId = sessionStorage.getItem('appeal_record_id')
     if (presetId) {
-      submitDialog.visible = true
       nextTick(() => {
-        const exists = myExceptionRecords.value.find((r) => r.id === Number(presetId) || r.id === presetId)
-        if (exists && !exists.appealed) {
-          submitForm.recordId = exists.id
-        }
+        const target = myExceptionRecords.value.find((r) => r.id === Number(presetId) || r.id === presetId)
+        if (target && !target.appealStatus) openAppealDialog(target)
         sessionStorage.removeItem('appeal_record_id')
       })
     }
@@ -353,7 +432,7 @@ onMounted(async () => {
 }
 .glass-card {
   padding: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 .page-header {
   margin-bottom: 20px;
@@ -367,5 +446,17 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--text-2);
   margin: 0;
+}
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+.miss {
+  color: #ff4d4f;
+  font-weight: 600;
 }
 </style>

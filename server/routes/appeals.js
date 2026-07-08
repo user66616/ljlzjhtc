@@ -30,7 +30,7 @@ function toCamel(r) {
 router.get('/', async (req, res) => {
   try {
     const { status, employeeId } = req.query
-    let sql = 'SELECT a.*, r.date AS record_date, r.check_in, r.check_out FROM attendance_appeals a LEFT JOIN attendance_records r ON a.record_id = r.id'
+    let sql = 'SELECT a.* FROM attendance_appeals a'
     const params = []
     const where = []
     if (status) { where.push('a.status = ?'); params.push(status) }
@@ -47,13 +47,16 @@ router.get('/', async (req, res) => {
 // POST /api/appeals —— 员工发起申诉
 router.post('/', async (req, res) => {
   try {
-    const { recordId, employeeId, reason } = req.body
+    const { recordId, employeeId, reason, recordStatus } = req.body
     if (!recordId || !employeeId || !reason) {
       return res.status(400).json({ message: '参数不完整' })
     }
+    // 查询记录日期用于展示
+    const [recRows] = await req.app.get('pool').query('SELECT date FROM attendance_records WHERE id = ?', [recordId])
+    const recordDate = recRows[0]?.date || null
     const [result] = await req.app.get('pool').execute(
-      'INSERT INTO attendance_appeals (record_id, employee_id, reason) VALUES (?, ?, ?)',
-      [recordId, employeeId, reason]
+      'INSERT INTO attendance_appeals (record_id, employee_id, reason, record_date, record_status) VALUES (?, ?, ?, ?, ?)',
+      [recordId, employeeId, reason, recordDate, recordStatus || '']
     )
     const [rows] = await req.app.get('pool').query('SELECT * FROM attendance_appeals WHERE id = ?', [result.insertId])
     res.status(201).json(toCamel(rows[0]))

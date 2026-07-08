@@ -50,6 +50,13 @@ app.listen(PORT, async () => {
   try {
     await testConnection()
     console.log('[server] MySQL 连接成功 ✓')
+    // 自动迁移：给 attendance_appeals 表补充字段（兼容旧版本）
+    try {
+      await pool.query(`ALTER TABLE attendance_appeals ADD COLUMN record_date DATE NULL AFTER reason`)
+    } catch (e) { /* 字段已存在忽略 */ }
+    try {
+      await pool.query(`ALTER TABLE attendance_appeals ADD COLUMN record_status VARCHAR(20) NULL AFTER record_date`)
+    } catch (e) { /* 字段已存在忽略 */ }
   } catch (e) {
     console.error('[server] MySQL 连接失败 ✗')
     console.error('  请检查：1) MySQL 服务是否启动  2) server/db.config.js 配置是否正确')
