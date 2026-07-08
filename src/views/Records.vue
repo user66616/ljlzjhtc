@@ -107,7 +107,7 @@
         </div>
         <el-table :data="paged" border stripe size="default" class="records-table" @row-click="openDetail"
           @selection-change="onSelectionChange">
-          <el-table-column type="selection" width="45" v-if="auth.role === 'admin' || auth.role === 'manager'" />
+          <el-table-column type="selection" width="45" v-if="auth.role === 'admin' || auth.role === 'manager'" :selectable="(row) => !row._virtualLeave" />
           <el-table-column type="index" label="#" width="55" align="center" />
           <el-table-column prop="employeeId" label="工号" width="90" sortable />
           <el-table-column prop="name" label="姓名" width="100" sortable />
@@ -172,16 +172,25 @@
         </div>
         <div class="detail-section">
           <h4>打卡信息</h4>
-          <div class="detail-row" v-if="!detail.editing"><span>上班打卡</span><b>{{ detail.row.checkIn || '未打卡' }}</b></div>
-          <div class="detail-row" v-if="!detail.editing"><span>下班打卡</span><b>{{ detail.row.checkOut || '未打卡' }}</b></div>
-          <div class="detail-row" v-if="detail.editing">
-            <span>上班打卡</span>
-            <el-time-select v-model="detail.editForm.checkIn" start="06:00" step="00:05" end="12:00" placeholder="选择时间" clearable style="width: 140px" />
-          </div>
-          <div class="detail-row" v-if="detail.editing">
-            <span>下班打卡</span>
-            <el-time-select v-model="detail.editForm.checkOut" start="15:00" step="00:05" end="23:59" placeholder="选择时间" clearable style="width: 140px" />
-          </div>
+          <template v-if="detail.row._virtualLeave">
+            <div class="detail-row">
+              <span>状态</span>
+              <el-tag type="primary" size="small">{{ { leave:'请假', business_trip:'出差', comp_off:'调休' }[detail.row._leaveType] || '请假' }}</el-tag>
+            </div>
+            <div class="detail-row" v-if="detail.row.reason"><span>原因</span><b>{{ detail.row.reason }}</b></div>
+          </template>
+          <template v-else>
+            <div class="detail-row" v-if="!detail.editing"><span>上班打卡</span><b>{{ detail.row.checkIn || '未打卡' }}</b></div>
+            <div class="detail-row" v-if="!detail.editing"><span>下班打卡</span><b>{{ detail.row.checkOut || '未打卡' }}</b></div>
+            <div class="detail-row" v-if="detail.editing">
+              <span>上班打卡</span>
+              <el-time-select v-model="detail.editForm.checkIn" start="06:00" step="00:05" end="12:00" placeholder="选择时间" clearable style="width: 140px" />
+            </div>
+            <div class="detail-row" v-if="detail.editing">
+              <span>下班打卡</span>
+              <el-time-select v-model="detail.editForm.checkOut" start="15:00" step="00:05" end="23:59" placeholder="选择时间" clearable style="width: 140px" />
+            </div>
+          </template>
         </div>
         <div class="detail-section">
           <h4>状态计算明细</h4>
@@ -200,7 +209,7 @@
           <div class="calc-trace" v-for="(t, i) in detail.row.__calcTrace" :key="i">{{ t }}</div>
         </div>
         <!-- P1-09 单条记录修正 -->
-        <div class="detail-actions" v-if="auth.role === 'admin' || auth.role === 'manager'">
+        <div class="detail-actions" v-if="(auth.role === 'admin' || auth.role === 'manager') && !detail.row._virtualLeave">
           <template v-if="!detail.editing">
             <el-button type="primary" plain @click="startEdit">修改打卡时间</el-button>
           </template>
@@ -211,7 +220,7 @@
         </div>
 
         <!-- P2-10 申诉功能（员工） -->
-        <div class="detail-actions" v-if="auth.role === 'employee' && detail.row && (detail.row.isLate || detail.row.isEarly || detail.row.status === 'absent' || detail.row.status === 'missing')">
+        <div class="detail-actions" v-if="auth.role === 'employee' && detail.row && !detail.row._virtualLeave && (detail.row.isLate || detail.row.isEarly || detail.row.status === 'absent' || detail.row.status === 'missing')">
           <el-button type="warning" plain @click="appealDialog.visible = true">发起申诉</el-button>
         </div>
       </template>
@@ -253,6 +262,7 @@ const rulesStore = useRulesStore()
 const loading = ref(false)
 const employees = ref([])
 const records = ref([])
+const leaves = ref([])
 const viewMode = ref('table')
 
 // P2-03 日历视图
@@ -321,7 +331,38 @@ const empMap = computed(() => {
 // 计算状态后的记录（附带员工信息）
 const computedRecords = computed(() => {
   const rules = rulesStore.rules
-  const calc = calcAll(records.value, rules)
+  // 合并：原记录 + 请假期间未打卡的虚拟记录
+  const merged = [...records.value]
+  const existingKey = new Set(merged.map((r) => `${r.employeeId}_${r.date}`))
+  leaves.value.forEach((l) => {
+    const start = new Date(l.startDate)
+    const end = new Date(l.endDate)
+    const cur = new Date(start)
+    while (cur <= end) {
+      const y = cur.getFullYear()
+      const m = String(cur.getMonth() + 1).padStart(2, '0')
+      const d = String(cur.getDate()).padStart(2, '0')
+      const dateStr = `${y}-${m}-${d}`
+      const key = `${l.employeeId}_${dateStr}`
+      if (!existingKey.has(key)) {
+        merged.push({
+          id: `leave_${l.employeeId}_${dateStr}`,
+          employeeId: l.employeeId,
+          date: dateStr,
+          checkIn: null,
+          checkOut: null,
+          overtimeMinutes: 0,
+          handleStatus: 'handled',
+          _virtualLeave: true,
+          _leaveType: l.leaveType,
+          reason: l.reason || ''
+        })
+        existingKey.add(key)
+      }
+      cur.setDate(cur.getDate() + 1)
+    }
+  })
+  const calc = calcAll(merged, rules, leaves.value)
   const map = empMap.value
   return calc.map((r) => {
     const emp = map[r.employeeId] || {}
@@ -364,12 +405,14 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes] = await Promise.all([
+    const [empRes, recRes, leaveRes] = await Promise.all([
       request.get('/employees'),
-      request.get('/attendanceRecords')
+      request.get('/attendanceRecords'),
+      request.get('/leaveRecords')
     ])
     employees.value = empRes.data
     records.value = recRes.data
+    leaves.value = leaveRes.data
     // 按日期升序
     records.value.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   } finally {
@@ -441,7 +484,9 @@ function openDetail(row) {
   // 生成判定过程说明
   const trace = []
   const rules = rulesStore.rules
-  if (!row.checkIn && !row.checkOut) {
+  if (row._virtualLeave) {
+    trace.push(`该日期处于${ { leave:'请假', business_trip:'出差', comp_off:'调休' }[row._leaveType] || '请假' }期间，不计入异常`)
+  } else if (!row.checkIn && !row.checkOut) {
     trace.push('无任何打卡记录 → 判定为缺勤')
   } else if (!row.checkIn || !row.checkOut) {
     trace.push(`仅${!row.checkIn ? '上班' : '下班'}打卡缺失 → 按缺卡策略处理`)
