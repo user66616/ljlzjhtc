@@ -3,6 +3,13 @@
     <div class="page-header">
       <h2 class="page-title">统计看板</h2>
       <p class="page-desc">{{ scopeDesc }}</p>
+      <div class="header-actions">
+        <el-radio-group v-model="dashRange" size="small" @change="onDashRangeChange">
+          <el-radio-button label="week">本周</el-radio-button>
+          <el-radio-button label="month">本月</el-radio-button>
+          <el-radio-button label="all">全部</el-radio-button>
+        </el-radio-group>
+      </div>
     </div>
 
     <!-- KPI 卡片 -->
@@ -181,12 +188,42 @@ const computedRecords = computed(() => {
   })
 })
 
-// 角色范围过滤
+// 角色范围过滤 + 时间范围筛选（P1-14）
+const dashRange = ref('all')
+
+function getRangeStart() {
+  if (dashRange.value === 'all') return null
+  const now = new Date()
+  if (dashRange.value === 'week') {
+    const day = now.getDay() || 7
+    const monday = new Date(now)
+    monday.setDate(now.getDate() - day + 1)
+    return monday.toISOString().slice(0, 10)
+  }
+  if (dashRange.value === 'month') {
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+  }
+  return null
+}
+
 const scoped = computed(() => {
-  if (auth.role === 'admin') return computedRecords.value
-  if (auth.role === 'manager') return computedRecords.value.filter((r) => r.dept === auth.dept)
-  return computedRecords.value.filter((r) => r.employeeId === auth.employeeId)
+  let arr = computedRecords.value
+  if (auth.role === 'manager') arr = arr.filter((r) => r.dept === auth.dept)
+  if (auth.role === 'employee') arr = arr.filter((r) => r.employeeId === auth.employeeId)
+  const start = getRangeStart()
+  if (start) arr = arr.filter((r) => r.date >= start)
+  return arr
 })
+
+function onDashRangeChange() {
+  nextTick(() => {
+    trendChart?.dispose()
+    deptChart?.dispose()
+    pieChart?.dispose()
+    otChart?.dispose()
+    renderCharts()
+  })
+}
 
 // KPI 汇总
 const summaryData = computed(() => summarize(scoped.value))

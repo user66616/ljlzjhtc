@@ -42,6 +42,30 @@ CREATE TABLE attendance_rules (
   updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 工作日历表（P1-10）
+DROP TABLE IF EXISTS work_calendar;
+CREATE TABLE work_calendar (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  date         DATE NOT NULL UNIQUE,
+  day_type     ENUM('workday','weekend','holiday') NOT NULL DEFAULT 'workday',
+  label        VARCHAR(50) NULL,
+  INDEX idx_date (date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 请假记录表（P1-11）
+DROP TABLE IF EXISTS leave_records;
+CREATE TABLE leave_records (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  employee_id  VARCHAR(20) NOT NULL,
+  start_date   DATE NOT NULL,
+  end_date     DATE NOT NULL,
+  leave_type   ENUM('leave','business_trip','comp_off') NOT NULL DEFAULT 'leave',
+  reason       VARCHAR(255) NULL,
+  created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_emp (employee_id),
+  INDEX idx_date (start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 考勤记录表
 DROP TABLE IF EXISTS attendance_records;
 CREATE TABLE attendance_records (

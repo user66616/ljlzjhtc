@@ -85,6 +85,84 @@
         </el-button>
       </div>
     </div>
+
+    <!-- P1-10 工作日历配置 -->
+    <div class="glass-card fade-up section-card">
+      <div class="card-title">
+        <el-icon><Calendar /></el-icon>
+        <span>工作日历配置</span>
+        <span class="section-hint">设置周末和法定节假日，非工作日不计入应出勤</span>
+      </div>
+      <div class="calendar-row">
+        <el-date-picker v-model="calForm.date" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" style="width: 180px" />
+        <el-select v-model="calForm.dayType" placeholder="日期类型" style="width: 140px">
+          <el-option label="工作日" value="workday" />
+          <el-option label="周末" value="weekend" />
+          <el-option label="法定节假日" value="holiday" />
+        </el-select>
+        <el-input v-model="calForm.label" placeholder="标签（如：国庆节）" style="width: 160px" />
+        <el-button type="primary" :icon="Plus" @click="addCalendar">添加</el-button>
+        <el-button type="default" @click="genWeekends">自动填充今年周末</el-button>
+      </div>
+      <el-table :data="calendar" border size="small" max-height="280" style="margin-top: 16px" v-loading="calLoading">
+        <el-table-column prop="date" label="日期" width="120" />
+        <el-table-column label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.dayType === 'workday' ? 'success' : row.dayType === 'weekend' ? 'info' : 'warning'" size="small">
+              {{ { workday: '工作日', weekend: '周末', holiday: '节假日' }[row.dayType] }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="label" label="标签" min-width="120"><template #default="{ row }">{{ row.label || '—' }}</template></el-table-column>
+        <el-table-column label="操作" width="80" align="center">
+          <template #default="{ row }">
+            <el-button type="danger" link size="small" @click="delCalendar(row.date)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <!-- P1-11 请假记录管理 -->
+    <div class="glass-card fade-up section-card">
+      <div class="card-title">
+        <el-icon><DocumentRemove /></el-icon>
+        <span>请假 / 出差 / 调休记录</span>
+        <span class="section-hint">导入后对应时段不计入异常统计</span>
+      </div>
+      <div class="leave-form">
+        <el-select v-model="leaveForm.employeeId" filterable placeholder="选择员工" style="width: 180px">
+          <el-option v-for="e in employees" :key="e.employeeId" :label="`${e.name} (${e.employeeId})`" :value="e.employeeId" />
+        </el-select>
+        <el-date-picker v-model="leaveForm.range" type="daterange" range-separator="至" start-placeholder="开始" end-placeholder="结束"
+          value-format="YYYY-MM-DD" style="width: 260px" />
+        <el-select v-model="leaveForm.leaveType" placeholder="类型" style="width: 120px">
+          <el-option label="请假" value="leave" />
+          <el-option label="出差" value="business_trip" />
+          <el-option label="调休" value="comp_off" />
+        </el-select>
+        <el-input v-model="leaveForm.reason" placeholder="原因（选填）" style="width: 200px" />
+        <el-button type="primary" :icon="Plus" @click="addLeave">添加</el-button>
+      </div>
+      <el-table :data="leaves" border size="small" max-height="280" style="margin-top: 16px" v-loading="leaveLoading">
+        <el-table-column prop="employeeId" label="工号" width="90" />
+        <el-table-column label="姓名" width="90">
+          <template #default="{ row }">{{ empName(row.employeeId) }}</template>
+        </el-table-column>
+        <el-table-column prop="startDate" label="开始" width="120" />
+        <el-table-column prop="endDate" label="结束" width="120" />
+        <el-table-column label="类型" width="80">
+          <template #default="{ row }">
+            <el-tag size="small">{{ { leave: '请假', business_trip: '出差', comp_off: '调休' }[row.leaveType] }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="reason" label="原因" min-width="150"><template #default="{ row }">{{ row.reason || '—' }}</template></el-table-column>
+        <el-table-column label="操作" width="80" align="center">
+          <template #default="{ row }">
+            <el-button type="danger" link size="small" @click="delLeave(row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
   </div>
 </template>
 
@@ -92,8 +170,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Setting, Check, RefreshRight, View, Refresh, Cpu
+  Setting, Check, RefreshRight, View, Refresh, Cpu, Calendar, DocumentRemove, Plus
 } from '@element-plus/icons-vue'
+import request from '../api/request'
 import { useRulesStore } from '../stores/rules'
 
 const rulesStore = useRulesStore()
@@ -109,17 +188,6 @@ const DEFAULT_RULES = {
 
 const form = reactive({ ...DEFAULT_RULES })
 const current = reactive({ ...DEFAULT_RULES })
-
-onMounted(async () => {
-  loading.value = true
-  try {
-    const r = await rulesStore.load()
-    Object.assign(form, r)
-    Object.assign(current, r)
-  } finally {
-    loading.value = false
-  }
-})
 
 async function onSave() {
   const payload = {
@@ -148,6 +216,112 @@ async function onRecalc() {
     ElMessage.success('已重新计算所有记录的状态与时长，前往「考勤记录 / 统计看板」查看更新')
   }, 600)
 }
+
+// ========== P1-10 工作日历 ==========
+const calendar = ref([])
+const calLoading = ref(false)
+const calForm = reactive({ date: '', dayType: 'holiday', label: '' })
+
+async function loadCalendar() {
+  calLoading.value = true
+  try {
+    const res = await request.get('/workCalendar')
+    calendar.value = res.data
+  } finally { calLoading.value = false }
+}
+
+async function addCalendar() {
+  if (!calForm.date || !calForm.dayType) {
+    ElMessage.warning('请选择日期和类型')
+    return
+  }
+  await request.post('/workCalendar', { entries: [{ date: calForm.date, dayType: calForm.dayType, label: calForm.label }] })
+  ElMessage.success('已添加')
+  calForm.date = ''; calForm.label = ''
+  await loadCalendar()
+}
+
+async function delCalendar(date) {
+  await request.delete(`/workCalendar/${date}`)
+  ElMessage.success('已删除')
+  await loadCalendar()
+}
+
+async function genWeekends() {
+  const year = new Date().getFullYear()
+  const entries = []
+  const d = new Date(year, 0, 1)
+  while (d.getFullYear() === year) {
+    const day = d.getDay()
+    if (day === 0 || day === 6) {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const dd = String(d.getDate()).padStart(2, '0')
+      entries.push({ date: `${y}-${m}-${dd}`, dayType: 'weekend', label: '周末' })
+    }
+    d.setDate(d.getDate() + 1)
+  }
+  await request.post('/workCalendar', { entries })
+  ElMessage.success(`已填充 ${entries.length} 个周末`)
+  await loadCalendar()
+}
+
+// ========== P1-11 请假记录 ==========
+const employees = ref([])
+const leaves = ref([])
+const leaveLoading = ref(false)
+const leaveForm = reactive({ employeeId: '', range: [], leaveType: 'leave', reason: '' })
+
+async function loadEmployeesAndLeaves() {
+  const [empRes, lvRes] = await Promise.all([
+    request.get('/employees'),
+    request.get('/leaveRecords')
+  ])
+  employees.value = empRes.data
+  leaves.value = lvRes.data
+}
+
+function empName(id) {
+  return employees.value.find((e) => e.employeeId === id)?.name || id
+}
+
+async function addLeave() {
+  if (!leaveForm.employeeId || !leaveForm.range || leaveForm.range.length !== 2) {
+    ElMessage.warning('请填写完整信息')
+    return
+  }
+  await request.post('/leaveRecords', {
+    employeeId: leaveForm.employeeId,
+    startDate: leaveForm.range[0],
+    endDate: leaveForm.range[1],
+    leaveType: leaveForm.leaveType,
+    reason: leaveForm.reason
+  })
+  ElMessage.success('请假记录已添加')
+  leaveForm.employeeId = ''; leaveForm.range = []; leaveForm.reason = ''
+  const res = await request.get('/leaveRecords')
+  leaves.value = res.data
+}
+
+async function delLeave(id) {
+  await request.delete(`/leaveRecords/${id}`)
+  ElMessage.success('已删除')
+  const res = await request.get('/leaveRecords')
+  leaves.value = res.data
+}
+
+// 初始化加载
+onMounted(async () => {
+  loading.value = true
+  try {
+    const r = await rulesStore.load()
+    Object.assign(form, r)
+    Object.assign(current, r)
+    await Promise.all([loadCalendar(), loadEmployeesAndLeaves()])
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <style scoped>
@@ -249,5 +423,21 @@ async function onRecalc() {
 }
 .recalc-btn {
   width: 100%;
+}
+.section-card {
+  margin-top: 20px;
+  padding: 20px;
+}
+.section-hint {
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 400;
+  margin-left: 8px;
+}
+.calendar-row, .leave-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 </style>

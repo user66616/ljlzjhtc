@@ -25,16 +25,42 @@
           :auto-upload="false"
           :show-file-list="false"
           :on-change="onFileChange"
-          accept=".csv"
+          accept=".csv,.xlsx,.xls"
           drag
           class="upload-dragger"
         >
           <el-icon class="upload-icon"><UploadFilled /></el-icon>
-          <div class="upload-text">将 CSV 文件拖到此处，或<em>点击上传</em></div>
+          <div class="upload-text">将 CSV / Excel 文件拖到此处，或<em>点击上传</em></div>
           <template #tip>
-            <div class="upload-tip">仅支持 .csv 格式，需包含 employeeId、date 字段</div>
+            <div class="upload-tip">支持 .csv / .xlsx / .xls 格式，需包含工号、日期字段</div>
           </template>
         </el-upload>
+      </div>
+    </div>
+
+    <!-- P1-04 字段映射 -->
+    <div v-if="mapping.show" class="glass-card fade-up step-card">
+      <div class="card-title">
+        <el-icon><Connection /></el-icon>
+        <span>字段映射 · 将文件列名对应到标准字段</span>
+      </div>
+      <p class="mapping-hint">系统检测到以下表头，请确认与标准字段的对应关系（无法匹配的请手动选择）</p>
+      <div class="mapping-grid">
+        <div class="mapping-item" v-for="f in STANDARD_FIELDS" :key="f.key">
+          <div class="map-label">
+            <b>{{ f.key }}</b>
+            <span class="map-desc">{{ f.desc }}</span>
+          </div>
+          <el-select v-model="mapping.map[f.key]" placeholder="选择文件列" clearable style="width: 200px">
+            <el-option v-for="h in mapping.headers" :key="h" :label="h" :value="h" />
+          </el-select>
+          <el-tag v-if="mapping.map[f.key]" type="success" size="small" effect="light">已映射</el-tag>
+          <el-tag v-else-if="f.key === 'employeeId' || f.key === 'date'" type="danger" size="small">必填</el-tag>
+        </div>
+      </div>
+      <div class="mapping-actions">
+        <el-button type="primary" :icon="Check" @click="applyMapping">应用映射并校验</el-button>
+        <el-button @click="resetMapping">取消</el-button>
       </div>
     </div>
 
@@ -134,13 +160,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   UploadFilled, Document, Download, DocumentChecked, Check,
-  RefreshLeft, CircleCheckFilled, Delete
+  RefreshLeft, CircleCheckFilled, Delete, Connection
 } from '@element-plus/icons-vue'
+import * as XLSX from 'xlsx'
 import request from '../api/request'
 import { parseCSV, toCSV, downloadCSV } from '../utils/csv'
 import { isValidTime } from '../utils/attendance'
@@ -149,10 +176,40 @@ import { useAuthStore } from '../stores/auth'
 const router = useRouter()
 const auth = useAuthStore()
 const REQUIRED_FIELDS = ['employeeId', 'date']
+const STANDARD_FIELDS = [
+  { key: 'employeeId', desc: '员工工号' },
+  { key: 'date', desc: '考勤日期（YYYY-MM-DD）' },
+  { key: 'checkIn', desc: '上班打卡时间（HH:mm）' },
+  { key: 'checkOut', desc: '下班打卡时间（HH:mm）' }
+]
+// 字段别名自动匹配表（用于模糊识别文件表头）
+const FIELD_ALIASES = {
+  employeeId: ['employeeid', '工号', '员工工号', 'emp_id', 'empid', 'id'],
+  date: ['date', '日期', '考勤日期', '打卡日期', 'day'],
+  checkIn: ['checkin', '上班打卡', '上班时间', '签到', 'check_in', 'intime'],
+  checkOut: ['checkout', '下班打卡', '下班时间', '签退', 'check_out', 'outtime']
+}
 
 const parsed = ref(null) // { headers, rows }
 const importing = ref(false)
 const result = ref(null)
+
+// P1-04 字段映射状态
+const mapping = reactive({
+  show: false,
+  headers: [],
+  map: {} // standardKey -> fileHeader
+})
+
+function guessMapping(headers) {
+  const map = {}
+  STANDARD_FIELDS.forEach((f) => {
+    const aliases = [f.key.toLowerCase(), ...(FIELD_ALIASES[f.key] || [])]
+    const hit = headers.find((h) => aliases.includes(String(h).toLowerCase().trim()))
+    if (hit) map[f.key] = hit
+  })
+  return map
+}
 
 // 校验每一行
 const enrichedRows = computed(() => {
@@ -195,25 +252,91 @@ const dedupCount = computed(() => validRows.value.length - dedupedRows.value.len
 function onFileChange(file) {
   const raw = file.raw
   if (!raw) return
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const text = e.target.result
-    try {
-      const { headers, rows } = parseCSV(text)
-      // 校验表头是否含必填字段
-      const missing = REQUIRED_FIELDS.filter((f) => !headers.includes(f))
-      if (missing.length) {
-        ElMessage.error(`CSV 表头缺少必填字段：${missing.join(', ')}`)
-        return
+  const name = raw.name.toLowerCase()
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    // P1-02 Excel 解析
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result)
+        const wb = XLSX.read(data, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+        if (json.length < 2) {
+          ElMessage.error('Excel 文件无有效数据')
+          return
+        }
+        const headers = json[0].map((h) => String(h).trim())
+        const rows = json.slice(1).map((arr) => {
+          const obj = {}
+          headers.forEach((h, i) => { obj[h] = arr[i] != null ? String(arr[i]).trim() : '' })
+          return obj
+        })
+        startMapping(headers, rows)
+      } catch (err) {
+        ElMessage.error('Excel 解析失败：' + err.message)
       }
-      parsed.value = { headers, rows }
-      result.value = null
-      ElMessage.success(`已解析 ${rows.length} 行数据，请检查校验结果`)
-    } catch (err) {
-      ElMessage.error('CSV 解析失败：' + err.message)
     }
+    reader.readAsArrayBuffer(raw)
+  } else {
+    // CSV
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result
+        const { headers, rows } = parseCSV(text)
+        startMapping(headers, rows)
+      } catch (err) {
+        ElMessage.error('CSV 解析失败：' + err.message)
+      }
+    }
+    reader.readAsText(raw, 'utf-8')
   }
-  reader.readAsText(raw, 'utf-8')
+}
+
+// P1-04 启动字段映射流程
+function startMapping(headers, rows) {
+  mapping.headers = headers
+  mapping.map = guessMapping(headers)
+  mapping._rows = rows // 暂存原始行
+  mapping.show = true
+  parsed.value = null
+  result.value = null
+  // 如果所有必填字段都自动匹配成功，直接应用
+  const allMapped = REQUIRED_FIELDS.every((f) => mapping.map[f])
+  if (allMapped) {
+    applyMapping()
+  } else {
+    ElMessage.info('请确认字段映射关系')
+  }
+}
+
+function applyMapping() {
+  // 校验必填字段映射
+  const missing = REQUIRED_FIELDS.filter((f) => !mapping.map[f])
+  if (missing.length) {
+    ElMessage.error(`请映射必填字段：${missing.join(', ')}`)
+    return
+  }
+  // 根据映射转换原始行
+  const map = mapping.map
+  const rows = (mapping._rows || []).map((r) => {
+    const o = {}
+    STANDARD_FIELDS.forEach((f) => {
+      const src = map[f.key]
+      o[f.key] = src ? r[src] : ''
+    })
+    return o
+  })
+  parsed.value = { headers: STANDARD_FIELDS.map((f) => f.key), rows }
+  mapping.show = false
+  ElMessage.success(`已映射并解析 ${rows.length} 行数据，请检查校验结果`)
+}
+
+function resetMapping() {
+  mapping.show = false
+  mapping.map = {}
+  mapping._rows = null
 }
 
 function downloadTemplate() {
@@ -477,5 +600,40 @@ async function onClear() {
 .clear-tip {
   font-size: 12px;
   color: var(--text-2);
+}
+.mapping-hint {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 0 0 16px;
+}
+.mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+@media (max-width: 800px) { .mapping-grid { grid-template-columns: 1fr; } }
+.mapping-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fafbfc;
+}
+.map-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.map-desc {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+.mapping-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 12px;
 }
 </style>

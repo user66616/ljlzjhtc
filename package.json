@@ -23,7 +23,8 @@
     "mysql2": "^3.11.3",
     "pinia": "^2.2.4",
     "vue": "^3.5.12",
-    "vue-router": "^4.4.5"
+    "vue-router": "^4.4.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1.4",

@@ -60,7 +60,19 @@
       </el-empty>
 
       <template v-else>
-        <el-table :data="paged" border stripe size="default" class="records-table" @row-click="openDetail">
+        <!-- P1-08 批量操作栏 -->
+        <div class="batch-bar" v-if="auth.role === 'admin' || auth.role === 'manager'">
+          <el-button type="warning" plain size="small" :disabled="selection.length === 0" @click="batchSetStatus('handled')">
+            批量标记已处理
+          </el-button>
+          <el-button type="info" plain size="small" :disabled="selection.length === 0" @click="batchSetStatus('pending')">
+            批量标记待处理
+          </el-button>
+          <span class="batch-count" v-if="selection.length > 0">已选 {{ selection.length }} 条</span>
+        </div>
+        <el-table :data="paged" border stripe size="default" class="records-table" @row-click="openDetail"
+          @selection-change="onSelectionChange">
+          <el-table-column type="selection" width="45" v-if="auth.role === 'admin' || auth.role === 'manager'" />
           <el-table-column type="index" label="#" width="55" align="center" />
           <el-table-column prop="employeeId" label="工号" width="90" sortable />
           <el-table-column prop="name" label="姓名" width="100" sortable />
@@ -304,6 +316,30 @@ function goImport() {
   router.push('/import')
 }
 
+// P1-08 批量操作
+const selection = ref([])
+function onSelectionChange(sel) {
+  selection.value = sel
+}
+async function batchSetStatus(status) {
+  if (selection.value.length === 0) return
+  try {
+    await Promise.all(
+      selection.value.map((row) =>
+        request.patch(`/attendanceRecords/${row.id}`, { handleStatus: status })
+      )
+    )
+    // 更新本地记录
+    const ids = new Set(selection.value.map((r) => r.id))
+    records.value = records.value.map((r) =>
+      ids.has(r.id) ? { ...r, handleStatus: status } : r
+    )
+    ElMessage.success(`已批量${status === 'handled' ? '标记已处理' : '标记待处理'} ${selection.value.length} 条`)
+  } catch (e) {
+    // 错误已由拦截器提示
+  }
+}
+
 // P1-07 记录详情抽屉
 const detail = reactive({ show: false, row: null, editing: false, editForm: { checkIn: '', checkOut: '' }, saving: false })
 
@@ -378,6 +414,17 @@ async function saveEdit() {
 
 .table-card {
   padding: 16px 20px;
+}
+.batch-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.batch-count {
+  font-size: 13px;
+  color: var(--brand);
+  font-weight: 600;
 }
 .records-table {
   width: 100%;
