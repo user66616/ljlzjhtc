@@ -158,7 +158,7 @@ const allMenus = [
   { path: '/dashboard', title: '统计看板', icon: 'DataAnalysis', roles: ['admin', 'manager', 'employee'] },
   { path: '/import', title: '数据导入', icon: 'UploadFilled', roles: ['admin'] },
   { path: '/records', title: '考勤记录', icon: 'Document', roles: ['admin', 'manager', 'employee'] },
-  { path: '/exceptions', title: '异常处理', icon: 'WarningFilled', roles: ['admin', 'manager'] },
+  { path: '/exceptions', title: '异常记录', icon: 'WarningFilled', roles: ['admin', 'manager'] },
   { path: '/reports', title: '月报中心', icon: 'Document', roles: ['admin', 'manager'] },
   { path: '/rules', title: '规则配置', icon: 'Setting', roles: ['admin'] },
   { path: '/appeals', title: '考勤申诉', icon: 'ChatLineRound', roles: ['admin', 'manager', 'employee'] },
@@ -185,14 +185,15 @@ const notifyCount = computed(() => notifyList.value.length)
 async function loadNotify() {
   const list = []
   try {
-    // 管理员/经理：待处理异常 + 待审核申诉
+    // 管理员/经理：本月异常记录 + 待审核申诉
     if (auth.role === 'admin' || auth.role === 'manager') {
       const { data: records } = await request.get('/attendanceRecords')
-      const pending = records.filter((r) => r.handleStatus === 'pending')
       const today = new Date().toISOString().slice(0, 10)
-      const recentPending = pending.filter((r) => r.date >= today.slice(0, 8) + '01')
-      if (recentPending.length > 0) {
-        list.push({ id: 'exc', type: 'exception', text: `${recentPending.length} 条异常考勤待处理`, time: '今日' })
+      const thisMonthRecords = records.filter((r) => r.date >= today.slice(0, 8) + '01')
+      const exceptionStatuses = ['late', 'early', 'missing', 'absent']
+      const thisMonthExceptions = thisMonthRecords.filter((r) => exceptionStatuses.includes(r.status))
+      if (thisMonthExceptions.length > 0) {
+        list.push({ id: 'exc', type: 'exception', text: `${thisMonthExceptions.length} 条本月异常考勤记录`, time: '今日' })
       }
       const { data: appeals } = await request.get('/appeals', { params: { status: 'pending' } })
       appeals.forEach((a) => {

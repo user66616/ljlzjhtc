@@ -95,22 +95,7 @@
       </el-empty>
 
       <template v-else>
-        <!-- P1-08 批量操作栏 -->
-        <div class="batch-bar" v-if="auth.role === 'admin' || auth.role === 'manager'">
-          <el-button type="warning" plain size="small" :disabled="selection.length === 0" @click="batchSetStatus('handled')">
-            批量标记已处理
-          </el-button>
-          <el-button type="info" plain size="small" :disabled="selection.length === 0" @click="batchSetStatus('pending')">
-            批量标记待处理
-          </el-button>
-          <span class="batch-count" v-if="selection.length > 0">已选 {{ selection.length }} 条</span>
-          <el-button type="primary" link size="small" @click="router.push('/exceptions')" style="margin-left: auto">
-            前往异常处理页面 →
-          </el-button>
-        </div>
-        <el-table :data="paged" border stripe size="default" class="records-table" @row-click="openDetail"
-          @selection-change="onSelectionChange">
-          <el-table-column type="selection" width="45" v-if="auth.role === 'admin' || auth.role === 'manager'" :selectable="(row) => !row._virtualLeave" />
+        <el-table :data="paged" border stripe size="default" class="records-table" @row-click="openDetail">
           <el-table-column type="index" label="#" width="55" align="center" />
           <el-table-column prop="employeeId" label="工号" width="90" sortable />
           <el-table-column prop="name" label="姓名" width="100" sortable />
@@ -146,21 +131,6 @@
           <el-table-column prop="overtimeMinutes" label="加班(分)" width="100" align="center" sortable>
             <template #default="{ row }">
               <span :class="{ ot: row.overtimeMinutes > 0 }">{{ row.overtimeMinutes || 0 }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="处理状态" width="100" align="center" v-if="auth.role === 'admin' || auth.role === 'manager'">
-            <template #default="{ row }">
-              <el-tag
-                v-if="!row._virtualLeave && ['late','early','missing','absent'].includes(row.status)"
-                :type="row.handleStatus === 'handled' ? 'success' : 'warning'"
-                effect="dark"
-                size="small"
-                style="cursor: pointer"
-                @click.stop="toggleHandleStatus(row)"
-              >
-                {{ row.handleStatus === 'handled' ? '已处理' : '待处理' }}
-              </el-tag>
-              <span v-else class="dim-text">—</span>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="90" align="center" v-if="auth.role === 'employee'">
@@ -502,45 +472,6 @@ function goAppeal(row) {
   router.push('/appeals')
 }
 
-// P1-08 批量操作
-const selection = ref([])
-function onSelectionChange(sel) {
-  selection.value = sel
-}
-async function batchSetStatus(status) {
-  if (selection.value.length === 0) return
-  try {
-    await Promise.all(
-      selection.value.map((row) =>
-        request.patch(`/attendanceRecords/${row.id}`, { handleStatus: status })
-      )
-    )
-    // 更新本地记录
-    const ids = new Set(selection.value.map((r) => r.id))
-    records.value = records.value.map((r) =>
-      ids.has(r.id) ? { ...r, handleStatus: status } : r
-    )
-    ElMessage.success(`已批量${status === 'handled' ? '标记已处理' : '标记待处理'} ${selection.value.length} 条，状态已同步至异常处理页面`)
-  } catch (e) {
-    // 错误已由拦截器提示
-  }
-}
-
-// 单条切换处理状态
-async function toggleHandleStatus(row) {
-  const newStatus = row.handleStatus === 'handled' ? 'pending' : 'handled'
-  try {
-    const res = await request.patch(`/attendanceRecords/${row.id}`, { handleStatus: newStatus })
-    row.handleStatus = res.data.handleStatus
-    // 同步到本地 records
-    const idx = records.value.findIndex((r) => r.id === row.id)
-    if (idx !== -1) records.value[idx].handleStatus = res.data.handleStatus
-    ElMessage.success(newStatus === 'handled' ? '已标记为已处理' : '已标记为待处理')
-  } catch (e) {
-    // 错误已由拦截器提示
-  }
-}
-
 // P1-07 记录详情抽屉
 const detail = reactive({ show: false, row: null, editing: false, editForm: { checkIn: '', checkOut: '' }, saving: false })
 
@@ -643,17 +574,6 @@ async function submitAppeal() {
 
 .table-card {
   padding: 16px 20px;
-}
-.batch-bar {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.batch-count {
-  font-size: 13px;
-  color: var(--brand);
-  font-weight: 600;
 }
 .records-table {
   width: 100%;

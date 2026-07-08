@@ -36,7 +36,7 @@ const routes = [
         path: 'exceptions',
         name: 'exceptions',
         component: () => import('../views/Exceptions.vue'),
-        meta: { roles: ['admin', 'manager'], title: '异常处理' }
+        meta: { roles: ['admin', 'manager'], title: '异常记录' }
       },
       {
         path: 'reports',
