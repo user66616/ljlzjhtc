@@ -56,12 +56,12 @@
             @click="router.push(`/employee/${auth.employeeId}`)"
           >我的主页</el-button>
           <el-tag :type="roleTagType" effect="light" round>{{ roleLabel }}</el-tag>
-          <el-icon class="theme-btn" @click="theme.toggle()">
+                    <el-icon class="icon-btn theme-btn" :class="{ active: theme.dark }" @click="theme.toggle()" title="切换主题">
             <Moon v-if="!theme.dark" />
             <Sunny v-else />
           </el-icon>
           <el-badge :value="notifyCount" :max="99" :hidden="notifyCount === 0" class="notify-badge">
-            <el-icon class="notify-btn" @click="notifyVisible = true">
+            <el-icon class="icon-btn notify-btn" :class="{ active: notifyVisible }" @click="notifyVisible = true" title="消息提醒">
               <Bell />
             </el-icon>
           </el-badge>
@@ -102,7 +102,13 @@
   <!-- 消息提醒抽屉 -->
   <el-drawer v-model="notifyVisible" title="消息提醒" size="380px" direction="rtl">
     <div class="notify-list">
-      <div v-for="n in notifyList" :key="n.id" class="notify-item" :class="'type-' + n.type">
+      <div
+        v-for="n in notifyList"
+        :key="n.id"
+        class="notify-item"
+        :class="'type-' + n.type"
+        @click="goNotify(n)"
+      >
         <el-icon class="notify-icon">
           <Warning v-if="n.type === 'exception'" />
           <EditPen v-else-if="n.type === 'appeal'" />
@@ -111,6 +117,7 @@
           <div class="notify-text">{{ n.text }}</div>
           <div class="notify-time">{{ n.time }}</div>
         </div>
+        <el-icon class="notify-arrow"><ArrowRight /></el-icon>
       </div>
       <el-empty v-if="notifyList.length === 0" description="暂无消息" />
     </div>
@@ -121,7 +128,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Avatar, Clock } from '@element-plus/icons-vue'
+import { Avatar, Clock, Moon, Sunny, Bell, ArrowDown, Warning, EditPen, ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import ChangePasswordDialog from '../components/ChangePasswordDialog.vue'
@@ -219,6 +226,15 @@ async function loadNotify() {
 onMounted(() => {
   loadNotify()
 })
+
+function goNotify(n) {
+  notifyVisible.value = false
+  if (n.type === 'exception') {
+    router.push('/exceptions')
+  } else if (n.type === 'appeal') {
+    router.push('/appeals')
+  }
+}
 
 function onCommand(cmd) {
   if (cmd === 'logout') {
@@ -327,38 +343,47 @@ function onCommand(cmd) {
   align-items: center;
   gap: 14px;
 }
-.theme-btn,
-.notify-btn {
+.icon-btn {
   font-size: 20px;
   cursor: pointer;
   color: var(--text-2);
-  transition: color 0.2s;
-  padding: 6px;
-  border-radius: 8px;
+  transition: all 0.2s;
+  padding: 7px;
+  border-radius: 10px;
+  background: transparent;
 }
-.theme-btn:hover,
-.notify-btn:hover {
+.icon-btn:hover {
   color: var(--brand);
   background: var(--bg);
+  transform: translateY(-1px);
+}
+.icon-btn.active {
+  color: var(--brand);
+  background: var(--el-color-primary-light-9);
 }
 .notify-badge :deep(.el-badge__content) {
   z-index: 1;
+  border: none;
 }
 .notify-list {
   padding: 0 12px;
 }
 .notify-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 8px;
+  padding: 14px 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
   background: var(--bg);
-  transition: background 0.2s;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: 1px solid transparent;
 }
 .notify-item:hover {
   background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7);
+  transform: translateX(2px);
 }
 .notify-icon {
   font-size: 20px;
@@ -369,6 +394,14 @@ function onCommand(cmd) {
 }
 .notify-item.type-appeal .notify-icon {
   color: #f59e0b;
+}
+.notify-arrow {
+  font-size: 14px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.notify-item:hover .notify-arrow {
+  color: var(--brand);
 }
 .notify-body {
   flex: 1;
