@@ -48,7 +48,7 @@
       <span class="hm-legend-text">状态：</span>
       <span class="hm-legend-item">
         <span class="hm-legend-dot" :style="{ background: STATUS_COLORS.leave }"></span>
-        请假
+        请假/出差/调休
       </span>
       <span class="hm-legend-item">
         <span class="hm-legend-dot" :style="{ background: STATUS_COLORS.absent }"></span>
@@ -321,17 +321,27 @@ function hoverCell(e, day) {
   if (!day.inYear) return
   const rect = gridRef.value.getBoundingClientRect()
   const cellRect = e.target.getBoundingClientRect()
-  let statusLabel = day.detail === '未到来' ? '未到来' : '休息'
-  let statusColor = day.detail === '未到来' ? FUTURE_COLOR : '#9ca3af'
+  let statusLabel = '休息'
+  let statusColor = '#9ca3af'
+  let tipDetail = ''
   if (day.status === 'absent') {
     statusLabel = '缺勤'
     statusColor = STATUS_COLORS.absent
+    tipDetail = day.detail !== '缺勤' ? day.detail : ''
   } else if (day.status === 'leave') {
-    statusLabel = '请假/出差/调休'
+    statusLabel = day.detail
     statusColor = STATUS_COLORS.leave
+    tipDetail = ''
   } else if (day.status === 'normal') {
     statusLabel = '出勤'
     statusColor = GREEN_SCALE[3]
+    tipDetail = day.detail.replace(/^出勤 · /, '')
+  } else if (day.detail === '未到来') {
+    statusLabel = '未到来'
+    statusColor = FUTURE_COLOR
+  } else if (day.detail === '周末休息') {
+    statusLabel = '周末休息'
+    statusColor = '#9ca3af'
   }
   tip.value = {
     show: true,
@@ -340,7 +350,7 @@ function hoverCell(e, day) {
     date: day.date,
     status: statusLabel,
     color: statusColor,
-    detail: day.detail
+    detail: tipDetail
   }
 }
 function hideTip() { tip.value.show = false }
