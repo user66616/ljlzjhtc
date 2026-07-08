@@ -74,7 +74,7 @@
         <el-empty v-if="filteredAppeals.length === 0" description="暂无申诉记录" />
         <el-table v-else :data="filteredAppeals" border size="small">
           <el-table-column type="index" label="#" width="55" align="center" />
-          <el-table-column label="申诉日期" width="120">
+          <el-table-column label="异常日期" width="120">
             <template #default="{ row }">{{ (row.recordDate || '').slice(0, 10) }}</template>
           </el-table-column>
           <el-table-column label="异常类型" width="100" align="center">
@@ -141,7 +141,7 @@
             <el-table-column label="员工姓名" width="110">
               <template #default="{ row }">{{ empMap[row.employeeId]?.name || row.employeeId }}</template>
             </el-table-column>
-            <el-table-column label="申诉记录" width="180">
+            <el-table-column label="异常日期" width="130">
               <template #default="{ row }">
                 <div>{{ (row.recordDate || '').slice(0, 10) }}</div>
                 <el-tag size="small" :type="STATUS_META[row.recordStatus]?.type" effect="light">
