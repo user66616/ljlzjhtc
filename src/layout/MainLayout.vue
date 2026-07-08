@@ -40,6 +40,10 @@
             <el-breadcrumb-item :to="{ path: '/dashboard' }">首页</el-breadcrumb-item>
             <el-breadcrumb-item>{{ route.meta.title }}</el-breadcrumb-item>
           </el-breadcrumb>
+          <div class="live-clock">
+            <el-icon><Clock /></el-icon>
+            <span>{{ currentTime }}</span>
+          </div>
         </div>
         <div class="header-right">
           <el-button
@@ -114,10 +118,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Avatar } from '@element-plus/icons-vue'
+import { Avatar, Clock } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
 import ChangePasswordDialog from '../components/ChangePasswordDialog.vue'
@@ -132,6 +136,23 @@ theme.init()
 const collapsed = ref(false)
 const pwdVisible = ref(false)
 const notifyVisible = ref(false)
+
+// 实时时钟
+const currentTime = ref('')
+let clockTimer = null
+function updateClock() {
+  const now = new Date()
+  const w = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()]
+  const pad = (n) => String(n).padStart(2, '0')
+  currentTime.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 周${w} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+}
+onMounted(() => {
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
+})
+onUnmounted(() => {
+  if (clockTimer) clearInterval(clockTimer)
+})
 
 const allMenus = [
   { path: '/dashboard', title: '统计看板', icon: 'DataAnalysis', roles: ['admin', 'manager', 'employee'] },
@@ -276,6 +297,20 @@ function onCommand(cmd) {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+.live-clock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+  border: 1px solid var(--border);
+  .el-icon { color: var(--brand); }
 }
 .collapse-btn {
   font-size: 20px;
