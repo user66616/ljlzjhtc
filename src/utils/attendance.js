@@ -30,6 +30,8 @@ export const STATUS_META = {
   missing: { label: '缺卡', type: 'danger', color: '#ff4d4f' },
   absent: { label: '缺勤', type: 'info', color: '#8c8c8c' },
   leave: { label: '请假', type: 'primary', color: '#2563eb' },
+  business_trip: { label: '出差', type: 'primary', color: '#7c3aed' },
+  comp_off: { label: '调休', type: 'primary', color: '#0891b2' },
   overtime: { label: '加班', type: 'primary', color: '#1677ff' }
 }
 
@@ -99,16 +101,17 @@ export function calcRecord(rec, rules) {
   }
 }
 
-// 批量计算（支持传入请假记录，请假期间标记为 leave 状态）
+// 批量计算（支持传入请假记录，请假期间标记为 leave / business_trip / comp_off 状态）
 export function calcAll(records, rules, leaves) {
   if (!rules) return records.map((r) => ({ ...r, status: 'normal' }))
   return records.map((r) => {
     if (leaves && leaves.length > 0) {
-      const onLeave = leaves.some(
+      const leave = leaves.find(
         (l) => l.employeeId === r.employeeId && r.date >= l.startDate && r.date <= l.endDate
       )
-      if (onLeave) {
-        return { ...r, status: 'leave', isLate: false, isEarly: false, isOvertime: false, lateMinutes: 0, earlyMinutes: 0, overtimeMinutes: 0 }
+      if (leave) {
+        const leaveStatus = leave.leaveType === 'business_trip' ? 'business_trip' : leave.leaveType === 'comp_off' ? 'comp_off' : 'leave'
+        return { ...r, status: leaveStatus, isLate: false, isEarly: false, isOvertime: false, lateMinutes: 0, earlyMinutes: 0, overtimeMinutes: 0 }
       }
     }
     return calcRecord(r, rules)
