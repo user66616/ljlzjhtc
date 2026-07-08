@@ -5,14 +5,6 @@
       <p class="page-desc">{{ scopeDesc }}</p>
     </div>
 
-    <!-- 统计：仅异常总数 -->
-    <div class="stat-row fade-up">
-      <div class="stat-card total">
-        <div class="stat-num">{{ exceptionRecords.length }}</div>
-        <div class="stat-label">异常总数</div>
-      </div>
-    </div>
-
     <!-- 筛选区 -->
     <div class="glass-card filter-bar fade-up">
       <el-form :inline="true" :model="filters">
@@ -199,32 +191,6 @@ function onReset() {
 </script>
 
 <style scoped>
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(160px, 240px));
-  gap: 16px;
-  margin-bottom: 20px;
-}
-.stat-card {
-  background: #fff;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 20px;
-  text-align: center;
-}
-.stat-card.total { border-top: 3px solid #1677ff; }
-.stat-num {
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 1;
-}
-.total .stat-num { color: #1677ff; }
-.stat-label {
-  margin-top: 6px;
-  font-size: 13px;
-  color: var(--text-2);
-}
-
 .filter-bar {
   margin-bottom: 16px;
   padding: 16px 20px;
