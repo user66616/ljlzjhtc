@@ -294,12 +294,10 @@ function onReset() {
 
 async function onRecalc() {
   recalcing.value = true
-  // 规则已保存，calcAll 在各视图读取 store.rules 时自动重算
-  // 这里触发一次 store 刷新并提示
   await rulesStore.load()
   setTimeout(() => {
     recalcing.value = false
-    ElMessage.success('已重新计算所有记录的状态与时长，前往「考勤记录 / 统计看板」查看更新')
+    ElMessage.success('已刷新规则，所有统计数据已按最新规则更新')
   }, 600)
 }
 
