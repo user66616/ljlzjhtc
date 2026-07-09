@@ -21,6 +21,13 @@
       <el-empty v-else description="点击下方按钮生成总结" />
       <div style="margin-top: 12px">
         <el-button type="primary" :icon="MagicStick" @click="generateSummary">生成总结</el-button>
+        <el-button type="success" :icon="MagicStick" :loading="cozeLoading" @click="generateCozeReport">AI 生成专业报告</el-button>
+      </div>
+      <div class="coze-report" v-if="cozeReport">
+        <div class="coze-report-title">AI 专业考勤报告</div>
+        <div class="summary-text" style="margin-top: 8px">
+          <p v-for="(line, i) in cozeReport.split('\n')" :key="i">{{ line }}</p>
+        </div>
       </div>
     </div>
 
@@ -40,6 +47,13 @@
         <el-form-item label="模型名称">
           <el-input v-model="aiConfig.modelName" placeholder="gpt-3.5-turbo" />
         </el-form-item>
+        <el-divider content-position="left">Coze 工作流配置（用于生成专业考勤报告）</el-divider>
+        <el-form-item label="Coze Token">
+          <el-input v-model="aiConfig.cozeToken" type="password" show-password placeholder="pat_... 或 OAuth Token" />
+        </el-form-item>
+        <el-form-item label="工作流 ID">
+          <el-input v-model="aiConfig.cozeWorkflowId" placeholder="如 7660329596181676075" />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="saveAiConfig">保存配置</el-button>
           <el-button @click="testAiConfig" :loading="testing">测试连接</el-button>
@@ -51,7 +65,7 @@
     <div class="glass-card fade-up">
       <div class="card-title">
         <el-icon><ChatDotRound /></el-icon>
-        <span>AI 个性化解读</span>
+        <span>AI 个性化解读（如需配置API）</span>
       </div>
       <el-input v-model="userQuestion" type="textarea" :rows="3" placeholder="请输入你的问题，如：本月哪个部门考勤最好？" />
       <div style="margin-top: 12px">
@@ -92,11 +106,17 @@ const approvedAppealIds = computed(() =>
 const summaryRange = ref('week')
 const summaryText = ref('')
 
+// Coze 工作流报告
+const cozeLoading = ref(false)
+const cozeReport = ref('')
+
 // P2-14 AI 配置
 const aiConfig = reactive({
   apiUrl: '',
   apiKey: '',
-  modelName: ''
+  modelName: '',
+  cozeToken: '',
+  cozeWorkflowId: ''
 })
 const testing = ref(false)
 
@@ -164,6 +184,76 @@ function generateSummary() {
   ElMessage.success('总结已生成')
 }
 
+// 调用 Coze 工作流生成专业考勤报告
+async function generateCozeReport() {
+  if (!computedRecords.value.length) {
+    ElMessage.warning('考勤数据尚未加载，请稍后再试')
+    return
+  }
+  cozeLoading.value = true
+  cozeReport.value = ''
+  try {
+    const rangeRecords = getRangeRecords(summaryRange.value)
+    const s = summarize(rangeRecords)
+    const rangeLabel = summaryRange.value === 'week' ? '本周' : '本月'
+    const today = new Date().toISOString().slice(0, 10)
+
+    // 员工维度明细
+    const empCount = new Set(rangeRecords.map((r) => r.employeeId)).size
+    const empMap = {}
+    rangeRecords.forEach((r) => {
+      if (!empMap[r.employeeId]) {
+        const emp = employees.value.find((e) => e.employeeId === r.employeeId) || {}
+        empMap[r.employeeId] = { name: emp.name || '未知', dept: emp.dept || '未知', late: 0, early: 0, absent: 0, missing: 0, overtime: 0, normal: 0 }
+      }
+      const e = empMap[r.employeeId]
+      if (r.status === 'late') e.late++
+      else if (r.status === 'early') e.early++
+      else if (r.status === 'absent') e.absent++
+      else if (r.status === 'missing') e.missing++
+      else e.normal++
+      e.overtime += (r.overtimeMinutes || 0)
+    })
+    const empLines = Object.values(empMap)
+      .map((e) => `${e.name}（${e.dept}）：正常${e.normal}次，迟到${e.late}次，早退${e.early}次，缺勤${e.absent}次，缺卡${e.missing}次，加班${(e.overtime / 60).toFixed(1)}小时`)
+      .join('；')
+
+    // 部门维度明细
+    const deptStats = {}
+    rangeRecords.forEach((r) => {
+      const emp = employees.value.find((e) => e.employeeId === r.employeeId)
+      const dept = emp?.dept || '未知'
+      if (!deptStats[dept]) deptStats[dept] = { late: 0, early: 0, absent: 0, overtime: 0, count: 0 }
+      deptStats[dept].count++
+      if (r.status === 'late') deptStats[dept].late++
+      if (r.status === 'early') deptStats[dept].early++
+      if (r.status === 'absent' || r.status === 'missing') deptStats[dept].absent++
+      deptStats[dept].overtime += (r.overtimeMinutes || 0)
+    })
+    const deptLines = Object.entries(deptStats)
+      .map(([d, v]) => `${d}：出勤${v.count}次，迟到${v.late}次，早退${v.early}次，缺勤${v.absent}次，加班${(v.overtime / 60).toFixed(1)}小时`)
+      .join('；')
+
+    // 请假统计
+    const rangeStart = getRangeStart(summaryRange.value)
+    const rangeLeaves = leaves.value.filter((l) => !rangeStart || l.startDate >= rangeStart || l.endDate >= rangeStart)
+    const leaveInfo = rangeLeaves.length > 0
+      ? `请假记录${rangeLeaves.length}条：${rangeLeaves.map((l) => { const e = employees.value.find(emp => emp.employeeId === l.employeeId); return `${e?.name || l.employeeId}(${l.leaveType || l.type || '事假'}) ${l.startDate}至${l.endDate}` }).join('；')}`
+      : '无请假记录'
+
+    const input = `统计周期：${rangeLabel}（截至${today}）。整体考勤数据：共${rangeRecords.length}条打卡记录，涉及${empCount}名员工。整体出勤率${s.attendanceRate}%，迟到${s.lateCount}次，早退${s.earlyCount}次，缺勤${s.absent}次，加班${s.overtimeHours}小时。${leaveInfo}。各部门明细：${deptLines}。员工个人明细：${empLines}。请基于以上考勤统计数据生成一份正式的考勤总结报告，要求包含整体情况分析、部门对比、突出问题和改进建议。`
+
+    console.log('[AIInsight] 发送 Coze input:', input.slice(0, 200))
+    const { data } = await request.post('/aiConfig/coze_run', { input }, { timeout: 120000 })
+    cozeReport.value = data.reply || '报告生成失败，未返回内容'
+    ElMessage.success('AI 报告已生成')
+  } catch (e) {
+    cozeReport.value = '报告生成失败：' + (e.response?.data?.message || e.message)
+  } finally {
+    cozeLoading.value = false
+  }
+}
+
 // P2-14 AI 配置
 async function loadAiConfig() {
   try {
@@ -172,6 +262,8 @@ async function loadAiConfig() {
       aiConfig.apiUrl = data.apiUrl || ''
       aiConfig.apiKey = data.apiKey || ''
       aiConfig.modelName = data.modelName || ''
+      aiConfig.cozeToken = data.cozeToken || ''
+      aiConfig.cozeWorkflowId = data.cozeWorkflowId || ''
     }
   } catch (e) { /* 忽略 */ }
 }
@@ -279,6 +371,18 @@ onMounted(async () => {
 }
 .summary-text p {
   margin: 0 0 8px;
+}
+.coze-report {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #d1fae5;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+}
+.coze-report-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: #16a34a;
 }
 .answer-box {
   background: var(--bg);

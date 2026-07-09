@@ -54,6 +54,9 @@ app.listen(PORT, async () => {
     // 自动迁移：给 attendance_appeals 表补充字段（兼容旧版本）
     try { await pool.query(`ALTER TABLE attendance_appeals ADD COLUMN record_date DATE NULL AFTER reason`) } catch (e) { /* ignore */ }
     try { await pool.query(`ALTER TABLE attendance_appeals ADD COLUMN record_status VARCHAR(20) NULL AFTER record_date`) } catch (e) { /* ignore */ }
+    // 自动迁移：给 ai_config 表补充 Coze 配置字段
+    try { await pool.query(`ALTER TABLE ai_config ADD COLUMN coze_token VARCHAR(500) NULL DEFAULT '' AFTER model_name`) } catch (e) { /* ignore */ }
+    try { await pool.query(`ALTER TABLE ai_config ADD COLUMN coze_workflow_id VARCHAR(100) NULL DEFAULT '' AFTER coze_token`) } catch (e) { /* ignore */ }
     // 回填旧数据：补全 record_date
     try {
       await pool.query(`
