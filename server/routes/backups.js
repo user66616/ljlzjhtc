@@ -2,6 +2,18 @@ import { Router } from 'express'
 
 const router = Router()
 
+// 获取本地时间格式化字符串（YYYY-MM-DD HH:mm:ss），避免 UTC 时差
+function getLocalTimeStr() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  const s = String(d.getSeconds()).padStart(2, '0')
+  return `${y}-${m}-${day} ${h}:${min}:${s}`
+}
+
 function toCamel(r) {
   return {
     id: r.id,
@@ -27,7 +39,7 @@ router.post('/backup', async (req, res) => {
   try {
     const pool = req.app.get('pool')
     const { operator } = req.body
-    const backupName = `备份_${new Date().toISOString().slice(0, 19).replace('T', ' ')}`
+    const backupName = `备份_${getLocalTimeStr()}`
     // 创建备份记录
     const [result] = await pool.execute(
       'INSERT INTO data_backups (backup_name, operator) VALUES (?, ?)',
