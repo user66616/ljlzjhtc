@@ -1,7 +1,7 @@
 <template>
   <div class="page logs-page" v-loading="loading">
     <div class="page-header">
-      <h2 class="page-title">操作日志（P2-17）</h2>
+      <h2 class="page-title">操作日志</h2>
       <p class="page-desc">记录导入数据、修改规则、处理异常等关键操作</p>
     </div>
 
@@ -29,7 +29,7 @@
         </el-table-column>
         <el-table-column prop="detail" label="操作详情" min-width="250" show-overflow-tooltip />
         <el-table-column label="操作时间" width="170">
-          <template #default="{ row }">{{ (row.createdAt || '').slice(0, 19) }}</template>
+          <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
       </el-table>
       <el-empty v-if="filteredLogs.length === 0" description="暂无操作日志" />
@@ -40,6 +40,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import request from '../api/request'
+import { formatTime } from '../utils/attendance'
 
 const loading = ref(false)
 const logs = ref([])

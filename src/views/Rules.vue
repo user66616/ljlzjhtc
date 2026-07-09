@@ -85,12 +85,12 @@
         <div class="recalc-box">
           <el-icon class="recalc-icon"><Cpu /></el-icon>
           <div class="recalc-text">
-            <div class="rt-title">一键重新计算</div>
-            <div class="rt-desc">规则修改后，重新计算所有记录的状态与时长</div>
+            <div class="rt-title">刷新规则</div>
+            <div class="rt-desc">保存规则后自动生效；如遇数据未更新，点此强制同步最新规则并重算</div>
           </div>
         </div>
         <el-button type="success" plain :icon="Refresh" :loading="recalcing" @click="onRecalc" class="recalc-btn">
-          立即重新计算
+          刷新并重算
         </el-button>
 
         <el-divider />
@@ -101,8 +101,8 @@
           <span>规则历史版本</span>
         </div>
         <el-table :data="versions" border size="small" max-height="240" v-loading="versionLoading">
-          <el-table-column prop="createdAt" label="保存时间" width="160">
-            <template #default="{ row }">{{ (row.createdAt || '').slice(0, 19) }}</template>
+          <el-table-column prop="createdAt" label="保存时间" width="170">
+            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
           </el-table-column>
           <el-table-column label="规则概要" min-width="200">
             <template #default="{ row }">
@@ -221,6 +221,7 @@ import {
 import request from '../api/request'
 import { useRulesStore } from '../stores/rules'
 import { useAuthStore } from '../stores/auth'
+import { formatTime } from '../utils/attendance'
 
 const rulesStore = useRulesStore()
 const auth = useAuthStore()

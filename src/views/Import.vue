@@ -137,9 +137,10 @@
     <div class="glass-card fade-up step-card" v-if="auth.role === 'admin'">
       <div class="card-title">
         <el-icon><FolderOpened /></el-icon>
-        <span>数据备份与回滚（P2-02）</span>
+        <span>数据备份与回滚</span>
         <span class="step-summary">
           <el-tag type="info">共 {{ backups.length }} 个备份</el-tag>
+          <el-tag type="warning">累计回滚 {{ rollbackCount }} 次</el-tag>
         </span>
       </div>
       <div class="clear-tip" style="margin-bottom: 12px">导入新数据前系统自动备份上一版全量数据，如导入出错可一键回滚恢复。</div>
@@ -148,7 +149,7 @@
         <el-table-column prop="recordCount" label="记录数" width="90" align="center" />
         <el-table-column prop="operator" label="操作人" width="100" />
         <el-table-column label="备份时间" width="170">
-          <template #default="{ row }">{{ (row.createdAt || '').slice(0, 19) }}</template>
+          <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="100" align="center">
           <template #default="{ row }">
@@ -195,7 +196,7 @@ import {
 import * as XLSX from 'xlsx'
 import request from '../api/request'
 import { parseCSV, toCSV, downloadCSV } from '../utils/csv'
-import { isValidTime } from '../utils/attendance'
+import { isValidTime, formatTime } from '../utils/attendance'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
@@ -476,12 +477,20 @@ async function onClear() {
 // P2-02 数据备份与回滚
 const backups = ref([])
 const backupLoading = ref(false)
+const rollbackCount = ref(0)
 
 async function loadBackups() {
   backupLoading.value = true
   try {
     const { data } = await request.get('/dataBackups')
     backups.value = data
+    try {
+      const logsRes = await request.get('/operationLogs')
+      const count = (logsRes.data || []).filter((l) => l.action === '回滚数据').length
+      rollbackCount.value = count
+    } catch (e) {
+      rollbackCount.value = 0
+    }
   } finally { backupLoading.value = false }
 }
 

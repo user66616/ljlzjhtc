@@ -106,7 +106,7 @@
             </template>
           </el-table-column>
           <el-table-column label="提交时间" width="165">
-            <template #default="{ row }">{{ (row.createdAt || '').slice(0, 19) }}</template>
+            <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
           </el-table-column>
         </el-table>
       </div>
@@ -171,7 +171,7 @@
               </template>
             </el-table-column>
             <el-table-column label="提交时间" width="165">
-              <template #default="{ row }">{{ (row.createdAt || '').slice(0, 19) }}</template>
+              <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="160" align="center">
               <template #default="{ row }">
@@ -235,7 +235,7 @@ import { WarningFilled, Document } from '@element-plus/icons-vue'
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
 import { useRulesStore } from '../stores/rules'
-import { STATUS_META, calcAll } from '../utils/attendance'
+import { STATUS_META, calcAll, formatTime } from '../utils/attendance'
 
 const auth = useAuthStore()
 const rulesStore = useRulesStore()

@@ -153,3 +153,17 @@ export function summarize(records) {
     attendanceRate: +attendanceRate.toFixed(1)
   }
 }
+
+// 格式化 ISO 时间为本地显示格式 YYYY-MM-DD HH:mm:ss
+export function formatTime(isoStr) {
+  if (!isoStr) return ''
+  const d = new Date(isoStr)
+  if (isNaN(d.getTime())) return isoStr
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  const s = String(d.getSeconds()).padStart(2, '0')
+  return `${y}-${m}-${day} ${h}:${min}:${s}`
+}
