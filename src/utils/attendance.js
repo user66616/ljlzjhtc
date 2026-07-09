@@ -126,23 +126,26 @@ export function calcAll(records, rules, leaves, approvedAppealIds) {
   })
 }
 
-// KPI 汇总
+// KPI 汇总（按主状态 status 计数，与月报统计口径一致；避免一条记录同时迟到早退被重复统计）
 export function summarize(records) {
   const total = records.length
-  const absent = records.filter((r) => r.status === 'absent').length
-  const attended = total - absent
-  const lateCount = records.filter((r) => r.isLate).length
-  const earlyCount = records.filter((r) => r.isEarly).length
-  const overtimeCount = records.filter((r) => r.isOvertime).length
+  const leaveCount = records.filter((r) => ['leave', 'business_trip', 'comp_off'].includes(r.status)).length
+  const absent = records.filter((r) => r.status === 'absent' || r.status === 'missing').length
+  const lateCount = records.filter((r) => r.status === 'late').length
+  const earlyCount = records.filter((r) => r.status === 'early').length
+  const overtimeCount = records.filter((r) => (r.overtimeMinutes || 0) > 0).length
   const overtimeMinutes = records.reduce((s, r) => s + (r.overtimeMinutes || 0), 0)
   const exceptionCount = records.filter((r) => ['late', 'early', 'missing', 'absent'].includes(r.status)).length
-  const attendanceRate = total === 0 ? 0 : (attended / total) * 100
+  const actualAttended = records.filter((r) => ['normal', 'late', 'early', 'overtime', 'appealed'].includes(r.status)).length
+  const shouldAttend = total - leaveCount
+  const attendanceRate = shouldAttend === 0 ? 0 : (actualAttended / shouldAttend) * 100
   return {
     total,
-    attended,
+    attended: actualAttended,
     absent,
     lateCount,
     earlyCount,
+    leaveCount,
     overtimeCount,
     overtimeMinutes,
     overtimeHours: +(overtimeMinutes / 60).toFixed(1),

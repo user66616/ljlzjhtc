@@ -189,7 +189,7 @@ onMounted(async () => {
     leaves.value = lvRes.data
     appeals.value = appealRes.data
     calendar.value = calRes.data
-    ranking.value = computeRanking(records.value, employees.value, rulesStore.rules)
+    ranking.value = computeRanking(records.value, employees.value, rulesStore.rules, approvedAppealIds.value, leaves.value)
 
     // 检查可见性
     const target = employees.value.find((e) => e.employeeId === targetId.value)

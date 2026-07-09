@@ -310,8 +310,8 @@ const stats = computed(() => {
           absent++
         } else {
           attended++
-          if (d.record.isLate) late++
-          if (d.record.isEarly) early++
+          if (d.record.status === 'late') late++
+          if (d.record.status === 'early') early++
           if (d.record.overtimeMinutes) overtimeMin += d.record.overtimeMinutes
         }
       } else if (d.status === 'absent') {

@@ -89,6 +89,7 @@
           <el-table-column prop="lateCount" label="迟到" width="70" align="center" />
           <el-table-column prop="earlyCount" label="早退" width="70" align="center" />
           <el-table-column prop="absentCount" label="缺勤" width="70" align="center" />
+          <el-table-column prop="missingCount" label="缺卡" width="70" align="center" />
           <el-table-column prop="anomalyScore" label="异常分" width="80" align="center">
             <template #default="{ row }"><span :style="{ color: row.anomalyScore > 5 ? '#ef4444' : '#faad14', fontWeight: 600 }">{{ row.anomalyScore }}</span></template>
           </el-table-column>
@@ -106,7 +107,7 @@ import { Download, User, OfficeBuilding, Printer } from '@element-plus/icons-vue
 import request from '../api/request'
 import { useAuthStore } from '../stores/auth'
 import { useRulesStore } from '../stores/rules'
-import { calcAll, STATUS_META } from '../utils/attendance'
+import { calcAll, summarize, STATUS_META } from '../utils/attendance'
 import { toCSV, downloadCSV } from '../utils/csv'
 
 const auth = useAuthStore()
@@ -116,6 +117,7 @@ const loading = ref(false)
 const employees = ref([])
 const records = ref([])
 const appeals = ref([])
+const leaves = ref([])
 
 const reportType = ref('personal')
 const month = ref(new Date().toISOString().slice(0, 7))
@@ -142,7 +144,11 @@ const monthRecords = computed(() => {
 })
 
 const calcMonthRecords = computed(() => {
-  const calc = calcAll(monthRecords.value, rulesStore.rules, [], approvedAppealIds.value)
+  const monthLeaves = leaves.value.filter((l) => {
+    const prefix = month.value
+    return l.startDate.startsWith(prefix) || l.endDate.startsWith(prefix) || (l.startDate <= prefix + '-31' && l.endDate >= prefix + '-01')
+  })
+  const calc = calcAll(monthRecords.value, rulesStore.rules, monthLeaves, approvedAppealIds.value)
   const map = empMap.value
   return calc.map((r) => {
     const emp = map[r.employeeId] || {}
@@ -157,13 +163,14 @@ const personalData = computed(() => {
   if (rows.length === 0) return null
   const emp = empMap.value[selectedEmp.value] || {}
   const exceptions = rows.filter((r) => ['late', 'early', 'missing', 'absent'].includes(r.status))
+  const s = summarize(rows)
   return {
     name: emp.name || selectedEmp.value,
-    attendedDays: rows.filter((r) => r.status !== 'absent').length,
-    lateCount: rows.filter((r) => r.status === 'late').length,
-    earlyCount: rows.filter((r) => r.status === 'early').length,
-    absentCount: rows.filter((r) => r.status === 'absent').length,
-    overtimeHours: (rows.reduce((s, r) => s + (r.overtimeMinutes || 0), 0) / 60).toFixed(1),
+    attendedDays: s.attended,
+    lateCount: s.lateCount,
+    earlyCount: s.earlyCount,
+    absentCount: s.absent,
+    overtimeHours: s.overtimeHours.toFixed(1),
     exceptions
   }
 })
@@ -171,7 +178,13 @@ const personalData = computed(() => {
 // 部门月报
 const deptData = computed(() => {
   let rows = calcMonthRecords.value
-  if (selectedDept.value) rows = rows.filter((r) => r.dept === selectedDept.value)
+  if (auth.role === 'manager' && auth.dept) {
+    rows = rows.filter((r) => r.dept === auth.dept)
+  } else if (selectedDept.value) {
+    rows = rows.filter((r) => r.dept === selectedDept.value)
+  }
+
+  const s = summarize(rows)
 
   const empStats = {}
   rows.forEach((r) => {
@@ -182,25 +195,25 @@ const deptData = computed(() => {
         overtimeMinutes: 0
       }
     }
-    const s = empStats[r.employeeId]
-    if (r.status === 'late') s.lateCount++
-    if (r.status === 'early') s.earlyCount++
-    if (r.status === 'absent') s.absentCount++
-    if (r.status === 'missing') s.missingCount++
-    s.overtimeMinutes += r.overtimeMinutes || 0
-    s.anomalyScore = s.lateCount + s.earlyCount + s.missingCount + s.absentCount * 2
+    const st = empStats[r.employeeId]
+    if (r.status === 'late') st.lateCount++
+    if (r.status === 'early') st.earlyCount++
+    if (r.status === 'absent') st.absentCount++
+    if (r.status === 'missing') st.missingCount++
+    st.overtimeMinutes += r.overtimeMinutes || 0
+    st.anomalyScore = st.lateCount + st.earlyCount + st.missingCount + st.absentCount * 2
   })
 
   const allEmps = Object.values(empStats)
   const anomalyEmps = allEmps.filter((e) => e.anomalyScore > 0).sort((a, b) => b.anomalyScore - a.anomalyScore)
 
   return {
-    dept: selectedDept.value || '全部',
+    dept: (auth.role === 'manager' && auth.dept) ? auth.dept : (selectedDept.value || '全部'),
     totalEmployees: allEmps.length,
-    totalLate: allEmps.reduce((s, e) => s + e.lateCount, 0),
-    totalEarly: allEmps.reduce((s, e) => s + e.earlyCount, 0),
-    totalAbsent: allEmps.reduce((s, e) => s + e.absentCount, 0),
-    totalOvertimeHours: (allEmps.reduce((s, e) => s + e.overtimeMinutes, 0) / 60).toFixed(1),
+    totalLate: s.lateCount,
+    totalEarly: s.earlyCount,
+    totalAbsent: s.absent,
+    totalOvertimeHours: s.overtimeHours.toFixed(1),
     anomalyEmployees: anomalyEmps
   }
 })
@@ -209,17 +222,17 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes, appealRes] = await Promise.all([
+    const [empRes, recRes, appealRes, leaveRes] = await Promise.all([
       request.get('/employees'),
       request.get('/attendanceRecords'),
-      request.get('/appeals')
+      request.get('/appeals'),
+      request.get('/leaveRecords')
     ])
     employees.value = empRes.data
     records.value = recRes.data
     appeals.value = appealRes.data
-    // 默认选中第一个员工
+    leaves.value = leaveRes.data
     if (employees.value.length > 0) selectedEmp.value = employees.value[0].employeeId
-    // 经理端默认只统计本部门
     if (auth.role === 'manager' && auth.dept) selectedDept.value = auth.dept
   } finally {
     loading.value = false

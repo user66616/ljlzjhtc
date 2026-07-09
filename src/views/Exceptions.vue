@@ -86,6 +86,7 @@ const loading = ref(false)
 const employees = ref([])
 const records = ref([])
 const appeals = ref([])
+const leaves = ref([])
 
 const filters = reactive({ status: '', dept: '', dateRange: null, keyword: '' })
 const page = reactive({ current: 1, size: 10 })
@@ -114,7 +115,7 @@ const approvedAppealIds = computed(() =>
 
 const computedRecords = computed(() => {
   const rules = rulesStore.rules
-  const calc = calcAll(records.value, rules, [], approvedAppealIds.value)
+  const calc = calcAll(records.value, rules, leaves.value, approvedAppealIds.value)
   const map = empMap.value
   return calc.map((r) => {
     const emp = map[r.employeeId] || {}
@@ -166,14 +167,16 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes, appealRes] = await Promise.all([
+    const [empRes, recRes, appealRes, leaveRes] = await Promise.all([
       request.get('/employees'),
       request.get('/attendanceRecords'),
-      request.get('/appeals')
+      request.get('/appeals'),
+      request.get('/leaveRecords')
     ])
     employees.value = empRes.data
     records.value = recRes.data
     appeals.value = appealRes.data
+    leaves.value = leaveRes.data
   } finally {
     loading.value = false
   }

@@ -396,7 +396,13 @@ const filtered = computed(() => {
       const kw = filters.keyword.toLowerCase()
       if (!r.name.toLowerCase().includes(kw) && !r.employeeId.toLowerCase().includes(kw)) return false
     }
-    if (filters.status && r.status !== filters.status) return false
+    if (filters.status) {
+      if (filters.status === 'normal') {
+        if (r.status !== 'normal' && r.status !== 'appealed') return false
+      } else {
+        if (r.status !== filters.status) return false
+      }
+    }
     return true
   })
 })

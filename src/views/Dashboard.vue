@@ -106,7 +106,7 @@
     </div>
 
     <!-- 图表区 -->
-    <div class="chart-grid fade-up">
+    <div class="chart-grid fade-up" :class="{ 'grid-single': auth.role === 'employee' }">
       <div class="glass-card chart-card chart-trend">
         <div class="card-title">
           <el-icon><TrendCharts /></el-icon><span>出勤率趋势</span>
@@ -119,7 +119,7 @@
         </div>
         <div ref="trendRef" class="chart-box"></div>
       </div>
-      <div class="glass-card chart-card chart-dept">
+      <div class="glass-card chart-card chart-dept" v-if="auth.role !== 'employee'">
         <div class="card-title">
           <el-icon><Histogram /></el-icon><span>部门迟到次数</span>
         </div>
@@ -128,14 +128,14 @@
     </div>
 
     <!-- P1-12 异常类型占比饼图 + P1-13 部门加班排行 -->
-    <div class="chart-grid2 fade-up">
+    <div class="chart-grid2 fade-up" :class="{ 'grid-single': auth.role === 'employee' }">
       <div class="glass-card chart-card">
         <div class="card-title">
           <el-icon><PieChart /></el-icon><span>异常类型占比</span>
         </div>
         <div ref="pieRef" class="chart-box"></div>
       </div>
-      <div class="glass-card chart-card">
+      <div class="glass-card chart-card" v-if="auth.role !== 'employee'">
         <div class="card-title">
           <el-icon><DataAnalysis /></el-icon><span>部门加班排行</span>
         </div>
@@ -239,6 +239,7 @@ const loading = ref(false)
 const employees = ref([])
 const records = ref([])
 const appeals = ref([])
+const leaves = ref([])
 
 const trendRef = ref()
 const deptRef = ref()
@@ -269,7 +270,7 @@ const approvedAppealIds = computed(() =>
 // 计算状态并附加员工信息
 const computedRecords = computed(() => {
   const rules = rulesStore.rules
-  const calc = calcAll(records.value, rules, [], approvedAppealIds.value)
+  const calc = calcAll(records.value, rules, leaves.value, approvedAppealIds.value)
   const map = empMap.value
   return calc.map((r) => {
     const emp = map[r.employeeId] || {}
@@ -295,9 +296,22 @@ function getRangeStart() {
   return null
 }
 
+function getRangeEnd() {
+  return null
+}
+
 const scoped = computed(() => {
   let arr = computedRecords.value
   if (auth.role === 'manager') arr = arr.filter((r) => r.dept === auth.dept)
+  if (auth.role === 'employee') arr = arr.filter((r) => r.employeeId === auth.employeeId)
+  const start = getRangeStart()
+  if (start) arr = arr.filter((r) => r.date >= start)
+  return arr
+})
+
+// 部门排行图表用：员工按自己过滤，admin/manager 看全公司各部门
+const deptScoped = computed(() => {
+  let arr = computedRecords.value
   if (auth.role === 'employee') arr = arr.filter((r) => r.employeeId === auth.employeeId)
   const start = getRangeStart()
   if (start) arr = arr.filter((r) => r.date >= start)
@@ -345,27 +359,34 @@ function addDays(d, days) {
 }
 
 // 趋势：按日期出勤率（支持时间范围筛选）
+// 出勤率口径与 summarize 一致：应到 = 总记录 - 请假类；实到 = normal/late/early/overtime/appealed
+const ATTENDED_STATUSES = new Set(['normal', 'late', 'early', 'overtime', 'appealed'])
+const LEAVE_STATUSES = new Set(['leave', 'business_trip', 'comp_off'])
+
 const trendData = computed(() => {
-  const allDates = scoped.value.map((r) => r.date)
-  if (allDates.length === 0) return { dates: [], rates: [] }
-  const maxDate = parseDateStr(allDates.sort()[allDates.length - 1])
+  const relevant = scoped.value.filter((r) => r.date <= fmtDateStr(new Date()))
+  if (relevant.length === 0) return { dates: [], rates: [] }
+  const maxDate = parseDateStr(relevant.map((r) => r.date).sort().slice(-1)[0])
   let minDate = null
   if (trendRange.value !== 'all') {
     const days = Number(trendRange.value)
-    // 包含起始日：往前推 days-1 天
     minDate = addDays(maxDate, -(days - 1))
   }
 
   const byDate = {}
-  scoped.value.forEach((r) => {
+  relevant.forEach((r) => {
     const d = parseDateStr(r.date)
     if (minDate && d < minDate) return
-    if (!byDate[r.date]) byDate[r.date] = { total: 0, attended: 0 }
-    byDate[r.date].total++
-    if (r.status !== 'absent') byDate[r.date].attended++
+    if (!byDate[r.date]) byDate[r.date] = { should: 0, attended: 0 }
+    if (LEAVE_STATUSES.has(r.status)) return
+    byDate[r.date].should++
+    if (ATTENDED_STATUSES.has(r.status)) byDate[r.date].attended++
   })
   const dates = Object.keys(byDate).sort()
-  const rates = dates.map((d) => +((byDate[d].attended / byDate[d].total) * 100).toFixed(1))
+  const rates = dates.map((d) => {
+    const { should, attended } = byDate[d]
+    return should === 0 ? 100 : +((attended / should) * 100).toFixed(1)
+  })
   return { dates, rates }
 })
 
@@ -381,9 +402,9 @@ function onTrendRangeChange() {
 // 部门迟到
 const deptLate = computed(() => {
   const byDept = {}
-  scoped.value.forEach((r) => {
+  deptScoped.value.forEach((r) => {
     if (!byDept[r.dept]) byDept[r.dept] = 0
-    if (r.isLate) byDept[r.dept]++
+    if (r.status === 'late') byDept[r.dept]++
   })
   const entries = Object.entries(byDept).map(([dept, count]) => ({ dept, count }))
   entries.sort((a, b) => b.count - a.count)
@@ -405,7 +426,7 @@ const anomalyBreakdown = computed(() => {
 // P1-13 部门加班排行
 const deptOvertime = computed(() => {
   const byDept = {}
-  scoped.value.forEach((r) => {
+  deptScoped.value.forEach((r) => {
     if (!byDept[r.dept]) byDept[r.dept] = 0
     byDept[r.dept] += r.overtimeMinutes || 0
   })
@@ -416,7 +437,7 @@ const deptOvertime = computed(() => {
 })
 
 // 员工考勤排名（基于异常分）
-const ranking = computed(() => computeRanking(records.value, employees.value, rulesStore.rules))
+const ranking = computed(() => computeRanking(records.value, employees.value, rulesStore.rules, approvedAppealIds.value, leaves.value))
 
 // Top5 最佳考勤（异常分最低）
 const topBest = computed(() => ranking.value.top5)
@@ -448,7 +469,7 @@ const momData = computed(() => {
   return {
     attendanceRate: {
       thisMonth: thisSummary.attendanceRate,
-      delta: thisSummary.attendanceRate - lastSummary.attendanceRate
+      delta: +(thisSummary.attendanceRate - lastSummary.attendanceRate).toFixed(1)
     },
     lateCount: {
       thisMonth: thisSummary.lateCount,
@@ -456,7 +477,7 @@ const momData = computed(() => {
     },
     overtimeHours: {
       thisMonth: thisSummary.overtimeHours,
-      delta: thisSummary.overtimeHours - lastSummary.overtimeHours
+      delta: +(thisSummary.overtimeHours - lastSummary.overtimeHours).toFixed(1)
     }
   }
 })
@@ -472,7 +493,7 @@ const alertEmployees = computed(() => {
   scoped.value.forEach((r) => {
     if (!r.date.startsWith(monthPrefix)) return
     if (!empRecords[r.employeeId]) empRecords[r.employeeId] = []
-    if (r.isLate) empRecords[r.employeeId].push(r.date)
+    if (r.status === 'late') empRecords[r.employeeId].push(r.date)
   })
 
   const result = []
@@ -608,10 +629,11 @@ function renderCharts() {
       legend: { bottom: 0, icon: 'circle', fontSize: 12 },
       series: [{
         type: 'pie',
-        radius: ['40%', '68%'],
+        radius: '65%',
         center: ['50%', '45%'],
         data: pieData,
-        label: { show: true, formatter: '{b}\n{d}%', fontSize: 12 },
+        label: { show: true, formatter: '{b}\n{d}%', fontSize: 13 },
+        labelLine: { show: true, length: 15, length2: 10 },
         itemStyle: { borderColor: '#fff', borderWidth: 2 }
       }]
     })
@@ -670,14 +692,16 @@ onMounted(async () => {
   loading.value = true
   try {
     await rulesStore.load()
-    const [empRes, recRes, appealRes] = await Promise.all([
+    const [empRes, recRes, appealRes, leaveRes] = await Promise.all([
       request.get('/employees', { params: { _t: Date.now() } }),
       request.get('/attendanceRecords', { params: { _t: Date.now() } }),
-      request.get('/appeals', { params: { _t: Date.now() } })
+      request.get('/appeals', { params: { _t: Date.now() } }),
+      request.get('/leaveRecords', { params: { _t: Date.now() } })
     ])
     employees.value = empRes.data
     records.value = recRes.data
     appeals.value = appealRes.data
+    leaves.value = leaveRes.data
     await nextTick()
     renderCharts()
     window.addEventListener('resize', resizeCharts)
@@ -772,6 +796,9 @@ onBeforeUnmount(() => {
   gap: 16px;
   margin-bottom: 20px;
 }
+.chart-grid.grid-single {
+  grid-template-columns: 1fr;
+}
 @media (max-width: 980px) {
   .chart-grid {
     grid-template-columns: 1fr;
@@ -783,6 +810,9 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   margin-bottom: 20px;
+}
+.chart-grid2.grid-single {
+  grid-template-columns: 1fr;
 }
 @media (max-width: 980px) {
   .chart-grid2 {

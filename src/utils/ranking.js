@@ -4,8 +4,8 @@ import { calcAll, summarize } from './attendance.js'
 // 计算全部员工的考勤排名
 // 返回 { ranked: [...], top5: [...], bottom5: [...] }
 // ranked 按 anomalyScore 升序（分数越低=异常越少=考勤越好）
-export function computeRanking(records, employees, rules) {
-  const calc = calcAll(records, rules)
+export function computeRanking(records, employees, rules, approvedAppealIds, leaves) {
+  const calc = calcAll(records, rules, leaves || [], approvedAppealIds)
   const byEmp = {}
   for (const r of calc) {
     if (!byEmp[r.employeeId]) {

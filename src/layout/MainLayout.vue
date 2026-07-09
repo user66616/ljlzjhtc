@@ -101,14 +101,21 @@
 
   <!-- 消息提醒抽屉 -->
   <el-drawer v-model="notifyVisible" title="消息提醒" size="380px" direction="rtl">
+    <template #header="{ close }">
+      <div class="drawer-header">
+        <span class="drawer-title">消息提醒</span>
+        <el-button v-if="unreadCount > 0" type="primary" link size="small" @click="markAllRead">全部已读</el-button>
+      </div>
+    </template>
     <div class="notify-list">
       <div
         v-for="n in notifyList"
         :key="n.id"
         class="notify-item"
-        :class="'type-' + n.type"
+        :class="['type-' + n.type, { 'is-read': readIds.has(n.id) }]"
         @click="goNotify(n)"
       >
+        <span class="unread-dot" v-if="!readIds.has(n.id)"></span>
         <el-icon class="notify-icon">
           <Warning v-if="n.type === 'exception'" />
           <EditPen v-else-if="n.type === 'appeal'" />
@@ -187,7 +194,41 @@ const avatarText = computed(() => (auth.name || '?').slice(0, 1))
 
 // 消息提醒
 const notifyList = ref([])
-const notifyCount = computed(() => notifyList.value.length)
+const readIds = ref(new Set())
+
+// 从 localStorage 加载已读记录
+function loadReadIds() {
+  try {
+    const key = `notify_read_${auth.employeeId || auth.username || 'default'}`
+    const saved = localStorage.getItem(key)
+    if (saved) readIds.value = new Set(JSON.parse(saved))
+  } catch (e) { readIds.value = new Set() }
+}
+
+// 保存已读记录
+function saveReadIds() {
+  try {
+    const key = `notify_read_${auth.employeeId || auth.username || 'default'}`
+    localStorage.setItem(key, JSON.stringify([...readIds.value]))
+  } catch (e) {}
+}
+
+const unreadCount = computed(() => {
+  return notifyList.value.filter((n) => !readIds.value.has(n.id)).length
+})
+const notifyCount = computed(() => unreadCount.value)
+
+function markRead(id) {
+  if (!readIds.value.has(id)) {
+    readIds.value.add(id)
+    saveReadIds()
+  }
+}
+
+function markAllRead() {
+  notifyList.value.forEach((n) => readIds.value.add(n.id))
+  saveReadIds()
+}
 
 async function loadNotify() {
   const list = []
@@ -224,10 +265,12 @@ async function loadNotify() {
 }
 
 onMounted(() => {
+  loadReadIds()
   loadNotify()
 })
 
 function goNotify(n) {
+  markRead(n.id)
   notifyVisible.value = false
   if (n.type === 'exception') {
     router.push('/exceptions')
@@ -344,11 +387,11 @@ function onCommand(cmd) {
   gap: 14px;
 }
 .icon-btn {
-  font-size: 24px;
+  font-size: 28px;
   cursor: pointer;
   color: var(--text-2);
   transition: all 0.2s;
-  padding: 8px;
+  padding: 7px;
   border-radius: 12px;
   background: transparent;
 }
@@ -371,6 +414,15 @@ function onCommand(cmd) {
   top: 4px;
   right: 6px;
 }
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.drawer-title {
+  font-size: 16px;
+  font-weight: 600;
+}
 .notify-list {
   padding: 0 12px;
 }
@@ -385,6 +437,23 @@ function onCommand(cmd) {
   transition: all 0.2s;
   cursor: pointer;
   border: 1px solid transparent;
+  position: relative;
+}
+.notify-item.is-read {
+  opacity: 0.55;
+}
+.notify-item.is-read .notify-text {
+  font-weight: 400;
+}
+.unread-dot {
+  position: absolute;
+  top: 12px;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
 }
 .notify-item:hover {
   background: var(--el-color-primary-light-9);

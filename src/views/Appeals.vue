@@ -243,6 +243,7 @@ const loading = ref(false)
 const appeals = ref([])
 const employees = ref([])
 const myRecords = ref([])
+const leaves = ref([])
 const statusFilter = ref('')
 
 const pageTitle = computed(() => {
@@ -298,7 +299,8 @@ const appealRecordMap = computed(() => {
 const myExceptionRecords = computed(() => {
   const rules = rulesStore.rules
   const approvedIds = appeals.value.filter((a) => a.status === 'approved').map((a) => a.recordId)
-  const calc = calcAll(myRecords.value, rules, [], approvedIds)
+  const myLeaves = leaves.value.filter((l) => l.employeeId === auth.employeeId)
+  const calc = calcAll(myRecords.value, rules, myLeaves, approvedIds)
   return calc
     .filter((r) => ['late', 'early', 'missing', 'absent'].includes(r.status))
     .map((r) => ({
@@ -323,10 +325,12 @@ async function loadAppeals() {
 
 async function loadMyRecords() {
   if (auth.role !== 'employee') return
-  const { data } = await request.get('/attendanceRecords', {
-    params: { employeeId: auth.employeeId }
-  })
-  myRecords.value = data
+  const [recRes, leaveRes] = await Promise.all([
+    request.get('/attendanceRecords', { params: { employeeId: auth.employeeId } }),
+    request.get('/leaveRecords', { params: { employeeId: auth.employeeId } })
+  ])
+  myRecords.value = recRes.data
+  leaves.value = leaveRes.data
 }
 
 const submitDialog = reactive({ visible: false, saving: false })
