@@ -105,6 +105,11 @@
           导出错误清单（{{ errorRows.length }} 条）
         </el-button>
       </div>
+      <!-- 大数据量导入进度条 -->
+      <div v-if="importing" class="import-progress">
+        <el-progress :percentage="importProgress" :stroke-width="10" :text-inside="true" status="success" />
+        <div class="progress-text">正在批量导入... {{ importDone }} / {{ importTotal }} 条</div>
+      </div>
     </div>
 
     <!-- 步骤三：导入结果 -->
@@ -219,6 +224,10 @@ const FIELD_ALIASES = {
 const parsed = ref(null) // { headers, rows }
 const importing = ref(false)
 const result = ref(null)
+// 大数据量导入进度
+const importProgress = ref(0)
+const importDone = ref(0)
+const importTotal = ref(0)
 
 // P1-04 字段映射状态
 const mapping = reactive({
@@ -374,6 +383,10 @@ function downloadTemplate() {
 
 async function onImport() {
   importing.value = true
+  // 初始化进度
+  importDone.value = 0
+  importTotal.value = dedupedRows.value.length
+  importProgress.value = 0
   try {
     const payload = dedupedRows.value.map((r) => ({
       employeeId: String(r.employeeId).trim(),
@@ -386,22 +399,37 @@ async function onImport() {
     try {
       await request.post('/dataBackups/backup', { operator: auth.name || 'admin' })
     } catch (e) { /* 备份失败不阻塞导入 */ }
-    // 逐条写入（json-server 自动分配 id）
-    await Promise.all(
-      payload.map((rec) => request.post('/attendanceRecords', rec))
-    )
+
+    // 批量分片导入：每片 2000 条，单请求写入，避免 N 次 HTTP 请求
+    const CHUNK = 2000
+    let successCount = 0
+    let failCount = 0
+    for (let i = 0; i < payload.length; i += CHUNK) {
+      const chunk = payload.slice(i, i + CHUNK)
+      // 单批次请求超时放宽到 120 秒（大数据量写入耗时较长）
+      const { data } = await request.post(
+        '/attendanceRecords/batch',
+        { records: chunk },
+        { timeout: 120000 }
+      )
+      successCount += data.success || 0
+      failCount += data.fail || 0
+      importDone.value = Math.min(i + CHUNK, payload.length)
+      importProgress.value = Math.round((importDone.value / importTotal.value) * 100)
+    }
+
     // 记录操作日志
     try {
-      await request.post('/operationLogs', { operator: auth.name || 'admin', action: '导入数据', detail: `导入 ${payload.length} 条记录` })
+      await request.post('/operationLogs', { operator: auth.name || 'admin', action: '导入数据', detail: `批量导入 ${successCount} 条记录` })
     } catch (e) { /* 忽略 */ }
     await loadBackups()
     result.value = {
-      success: payload.length,
-      fail: errorRows.value.length,
+      success: successCount,
+      fail: failCount + errorRows.value.length,
       dedup: dedupCount.value
     }
     parsed.value = null
-    ElMessage.success(`导入成功，共写入 ${payload.length} 条记录（已自动备份上一版数据）`)
+    ElMessage.success(`导入成功，共写入 ${successCount} 条记录（已自动备份上一版数据）`)
   } catch (e) {
     // 错误已由拦截器提示
   } finally {
@@ -612,6 +640,16 @@ loadBackups()
 .import-actions {
   display: flex;
   gap: 12px;
+}
+
+.import-progress {
+  margin-top: 16px;
+}
+.progress-text {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  text-align: center;
 }
 
 .result-grid {

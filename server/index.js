@@ -17,7 +17,8 @@ const app = express()
 const PORT = 3001
 
 app.use(cors())
-app.use(express.json())
+// 放大 body 限制以支持大批量考勤数据导入（默认 100kb 过小）
+app.use(express.json({ limit: '20mb' }))
 
 // 共享连接池
 app.set('pool', pool)
